@@ -1,0 +1,20 @@
+# SimpleBackpack configuration file
+# All messages and settings are in English
+
+backpack:
+  name: "§bSimple Backpack" # Inventory name in Aqua color
+  allowed-worlds:
+    - world
+    - world_nether
+    - world_the_end
+  allow-in-creative: false # If true, players can use backpack in creative mode
+  auto-save-on-quit: true # Automatically save backpack when player disconnects
+
+messages-enabled: true # If false, no messages will be sent to players
+
+messages:
+  open-success: "§bYour backpack is now open!"
+  no-permission: "§cYou do not have permission to use this command."
+  not-allowed-world: "§cYou cannot use your backpack in this world."
+  creative-not-allowed: "§cBackpack is not available in Creative mode."
+  reload-success: "§aConfig reloaded successfully."

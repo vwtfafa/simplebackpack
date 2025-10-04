@@ -1,0 +1,10 @@
+name: SimpleBackpack
+main: org.vwtfafa.backpack.Backpack
+version: 1.0.0
+api-version: 1.21
+commands:
+  backpack:
+    description: Öffnet dein persönliches Backpack (27 Slots, persistent)
+authors: ["vwtfafa"]
+description: Ein einfaches Backpack-Plugin für Minecraft 1.21.8 (Paper/Spigot). Jeder Spieler hat ein eigenes, persistentes Backpack mit 27 Slots.
+
