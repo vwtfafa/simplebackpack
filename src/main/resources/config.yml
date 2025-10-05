@@ -1,20 +1,47 @@
 # SimpleBackpack configuration file
-# All messages and settings are in English
+# Language: en (en/de)
+language: en
 
 backpack:
   name: "§bSimple Backpack" # Inventory name in Aqua color
+  size: 27 # Possible values: 9, 18, 27, 36, 45, 54
   allowed-worlds:
     - world
     - world_nether
     - world_the_end
   allow-in-creative: false # If true, players can use backpack in creative mode
   auto-save-on-quit: true # Automatically save backpack when player disconnects
+  keep-on-death: true # If true, backpack contents are kept on death
+  gui-configurable: true # If true, players can configure backpack via GUI
+
+team:
+  enabled: true
+  max-size: 5 # Maximum number of players per team
 
 messages-enabled: true # If false, no messages will be sent to players
 
 messages:
-  open-success: "§bYour backpack is now open!"
-  no-permission: "§cYou do not have permission to use this command."
-  not-allowed-world: "§cYou cannot use your backpack in this world."
-  creative-not-allowed: "§cBackpack is not available in Creative mode."
-  reload-success: "§aConfig reloaded successfully."
+  en:
+    open-success: "§bYour backpack is now open!"
+    no-permission: "§cYou do not have permission to use this command."
+    not-allowed-world: "§cYou cannot use your backpack in this world."
+    creative-not-allowed: "§cBackpack is not available in Creative mode."
+    reload-success: "§aConfig reloaded successfully."
+    first-join: "§eWelcome! Use /backpack to open your personal backpack. You can share it with your team and configure it via /backpackconfig."
+    team-invite: "§aYou have invited {player} to your team."
+    team-joined: "§aYou have joined the team!"
+    team-full: "§cYour team is full."
+    team-share: "§bYou are now sharing your backpack with your team."
+    config-changed: "§aBackpack configuration updated."
+  de:
+    open-success: "§bDein Rucksack ist jetzt geöffnet!"
+    no-permission: "§cDu hast keine Berechtigung für diesen Befehl."
+    not-allowed-world: "§cDu kannst deinen Rucksack in dieser Welt nicht benutzen."
+    creative-not-allowed: "§cRucksack ist im Kreativmodus nicht verfügbar."
+    reload-success: "§aKonfiguration erfolgreich neu geladen."
+    first-join: "§eWillkommen! Nutze /backpack, um deinen persönlichen Rucksack zu öffnen. Du kannst ihn mit deinem Team teilen und über /backpackconfig konfigurieren."
+    team-invite: "§aDu hast {player} in dein Team eingeladen."
+    team-joined: "§aDu bist dem Team beigetreten!"
+    team-full: "§cDein Team ist voll."
+    team-share: "§bDu teilst deinen Rucksack jetzt mit deinem Team."
+    config-changed: "§aRucksack-Konfiguration aktualisiert."
