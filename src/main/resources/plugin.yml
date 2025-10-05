@@ -1,11 +1,12 @@
 name: SimpleBackpack
 main: org.vwtfafa.backpack.Backpack
-version: 2.0.0
-api-version: 1.20
+version: 2.1.0
+api-version: 1.21
 commands:
   backpack:
     description: Opens your personal backpack (configurable size, persistent)
     usage: /backpack
+    aliases: [bp]
   invite:
     description: Invite a player to your team to share your backpack
     usage: /invite <player>
@@ -16,4 +17,4 @@ commands:
     description: Open the backpack configuration GUI
     usage: /backpackconfig
 authors: ["vwtfafa"]
-description: A simple backpack plugin for Minecraft 1.20+ (Paper/Spigot). Each player has a persistent, configurable backpack. Supports teams, GUI config, and multi-language messages.
+description: A simple backpack plugin for Minecraft 1.21+ (Paper/Spigot/Bukkit/Purpur). Each player has a persistent, configurable backpack. Supports teams, GUI config, multi-language messages, and /bp alias.

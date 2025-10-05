@@ -15,28 +15,24 @@ import java.util.*;
 
 public final class Backpack extends JavaPlugin implements Listener {
     private BackpackManager backpackManager;
-    private String backpackName;
-    private int backpackSize;
-    private List<String> allowedWorlds;
+    private String language;
+    private final Map<UUID, Set<UUID>> teams = new HashMap<>();
+    private final Set<UUID> firstJoinPlayers = new HashSet<>();
+    private int teamMaxSize;
+    private boolean teamEnabled;
     private boolean allowInCreative;
     private boolean autoSaveOnQuit;
     private boolean keepOnDeath;
     private boolean guiConfigurable;
     private boolean messagesEnabled;
-    private String language;
-    private Map<UUID, Set<UUID>> teams = new HashMap<>();
-    private int teamMaxSize;
-    private boolean teamEnabled;
-    private Set<UUID> firstJoinPlayers = new HashSet<>();
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         FileConfiguration config = getConfig();
         language = config.getString("language", "en");
-        backpackName = config.getString("backpack.name", "§bSimple Backpack");
-        backpackSize = config.getInt("backpack.size", 27);
-        allowedWorlds = config.getStringList("backpack.allowed-worlds");
+        String backpackName = config.getString("backpack.name", "§bSimple Backpack");
+        int backpackSize = config.getInt("backpack.size", 27);
         allowInCreative = config.getBoolean("backpack.allow-in-creative", false);
         autoSaveOnQuit = config.getBoolean("backpack.auto-save-on-quit", true);
         keepOnDeath = config.getBoolean("backpack.keep-on-death", true);
@@ -45,11 +41,10 @@ public final class Backpack extends JavaPlugin implements Listener {
         teamEnabled = config.getBoolean("team.enabled", true);
         teamMaxSize = config.getInt("team.max-size", 5);
         backpackManager = new BackpackManager(this, backpackName, backpackSize, teams, teamEnabled);
-        getServer().getPluginManager().registerEvents(this, this);
-        getCommand("backpack").setExecutor(this);
-        getCommand("invite").setExecutor(this);
-        getCommand("team").setExecutor(this);
-        getCommand("backpackconfig").setExecutor(this);
+        if (getCommand("backpack") != null) getCommand("backpack").setExecutor(this);
+        if (getCommand("invite") != null) getCommand("invite").setExecutor(this);
+        if (getCommand("team") != null) getCommand("team").setExecutor(this);
+        if (getCommand("backpackconfig") != null) getCommand("backpackconfig").setExecutor(this);
     }
 
     @Override
@@ -64,19 +59,15 @@ public final class Backpack extends JavaPlugin implements Listener {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player)) {
+        if (!(sender instanceof Player player)) {
             if (messagesEnabled) sender.sendMessage("§cThis command can only be used by players.");
             return true;
         }
-        Player player = (Player) sender;
         switch (command.getName().toLowerCase()) {
             case "backpack":
+            case "bp":
                 if (!player.hasPermission("simplebackpack.use")) {
                     if (messagesEnabled) player.sendMessage(getMessage("no-permission"));
-                    return true;
-                }
-                if (!allowedWorlds.contains(player.getWorld().getName())) {
-                    if (messagesEnabled) player.sendMessage(getMessage("not-allowed-world"));
                     return true;
                 }
                 if (!allowInCreative && player.getGameMode().name().equalsIgnoreCase("CREATIVE")) {

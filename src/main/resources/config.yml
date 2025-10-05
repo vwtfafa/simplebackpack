@@ -5,10 +5,6 @@ language: en
 backpack:
   name: "§bSimple Backpack" # Inventory name in Aqua color
   size: 27 # Possible values: 9, 18, 27, 36, 45, 54
-  allowed-worlds:
-    - world
-    - world_nether
-    - world_the_end
   allow-in-creative: false # If true, players can use backpack in creative mode
   auto-save-on-quit: true # Automatically save backpack when player disconnects
   keep-on-death: true # If true, backpack contents are kept on death
