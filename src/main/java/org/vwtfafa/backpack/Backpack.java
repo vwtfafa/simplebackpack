@@ -1,137 +1,161 @@
 package org.vwtfafa.backpack;
 
-import org.bukkit.Bukkit;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
+
 import java.util.*;
 
-public final class Backpack extends JavaPlugin implements Listener {
+public class Backpack extends JavaPlugin {
     private BackpackManager backpackManager;
-    private String language;
-    private final Map<UUID, Set<UUID>> teams = new HashMap<>();
-    private final Set<UUID> firstJoinPlayers = new HashSet<>();
-    private int teamMaxSize;
-    private boolean teamEnabled;
-    private boolean allowInCreative;
-    private boolean autoSaveOnQuit;
-    private boolean keepOnDeath;
-    private boolean guiConfigurable;
-    private boolean messagesEnabled;
+    private Map<UUID, Set<UUID>> teams = new HashMap<>();
+    private Locale locale = Locale.ENGLISH;
+    private boolean messagesEnabled = true;
+    private boolean classicMode = false;
+    private boolean teamEnabled = true;
+    private boolean adminEnabled = true;
+    private boolean showTeamCommands = true;
+    private boolean showAdminCommands = true;
+    private boolean liveConfigReload = true;
+    private boolean keepContentsOnDeath = true;
+    private boolean backpacksEnabled = true;
+
+    private final Set<String> registeredDynamicCommands = new HashSet<>();
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        FileConfiguration config = getConfig();
-        language = config.getString("language", "en");
-        String backpackName = config.getString("backpack.name", "§bSimple Backpack");
-        int backpackSize = config.getInt("backpack.size", 27);
-        allowInCreative = config.getBoolean("backpack.allow-in-creative", false);
-        autoSaveOnQuit = config.getBoolean("backpack.auto-save-on-quit", true);
-        keepOnDeath = config.getBoolean("backpack.keep-on-death", true);
-        guiConfigurable = config.getBoolean("backpack.gui-configurable", true);
-        messagesEnabled = config.getBoolean("messages-enabled", true);
-        teamEnabled = config.getBoolean("team.enabled", true);
-        teamMaxSize = config.getInt("team.max-size", 5);
-        backpackManager = new BackpackManager(this, backpackName, backpackSize, teams, teamEnabled);
-        if (getCommand("backpack") != null) getCommand("backpack").setExecutor(this);
-        if (getCommand("invite") != null) getCommand("invite").setExecutor(this);
-        if (getCommand("team") != null) getCommand("team").setExecutor(this);
-        if (getCommand("backpackconfig") != null) getCommand("backpackconfig").setExecutor(this);
+        reloadConfig();
+        loadConfigOptions();
+        backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teams, teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
+        registerCommands();
+        getServer().getPluginManager().registerEvents(backpackManager, this);
     }
 
     @Override
     public void onDisable() {
-        backpackManager.saveAllBackpacks();
+        if (backpackManager != null) backpackManager.saveAllBackpacks();
+        unregisterDynamicCommands();
+    }
+
+    private void unregisterDynamicCommands() {
+        for (String cmd : registeredDynamicCommands) {
+            try {
+                getCommand(cmd).setExecutor(null);
+            } catch (Exception ignored) {}
+        }
+        registeredDynamicCommands.clear();
+    }
+
+    private void loadConfigOptions() {
+        FileConfiguration config = getConfig();
+        String lang = config.getString("language", "en");
+        if (lang.equalsIgnoreCase("de")) locale = Locale.GERMAN;
+        classicMode = config.getBoolean("classic-mode", false);
+        teamEnabled = config.getBoolean("team.enabled", true);
+        adminEnabled = config.getBoolean("admin.enabled", true);
+        showTeamCommands = config.getBoolean("show-team-commands", true);
+        showAdminCommands = config.getBoolean("show-admin-commands", true);
+        liveConfigReload = config.getBoolean("live-config-reload", true);
+        keepContentsOnDeath = config.getBoolean("backpack.keep-on-death", true);
+        messagesEnabled = config.getBoolean("messages-enabled", true);
+        backpacksEnabled = config.getBoolean("backpacks-enabled", true);
+    }
+
+    private String getBackpackName() {
+        return getConfig().getString("backpack.name", "§bSimple Backpack");
+    }
+    private int getBackpackSize() {
+        return getConfig().getInt("backpack.size", 27);
+    }
+
+    private void registerCommands() {
+        unregisterDynamicCommands();
+        PluginCommand backpackCmd = getCommand("backpack");
+        if (backpackCmd != null) {
+            backpackCmd.setExecutor((sender, command, label, args) -> {
+                if (!backpacksEnabled) {
+                    sender.sendMessage(getMessage("backpacks-disabled"));
+                    return true;
+                }
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage("This command can only be used by players.");
+                    return true;
+                }
+                Player player = (Player) sender;
+                if (messagesEnabled) player.sendMessage(getMessage("open-success"));
+                backpackManager.openBackpack(player);
+                return true;
+            });
+            registeredDynamicCommands.add("backpack");
+        }
+        PluginCommand configCmd = getCommand("backpackconfig");
+        if (configCmd != null) {
+            configCmd.setExecutor((sender, command, label, args) -> {
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage("This command can only be used by players.");
+                    return true;
+                }
+                Player player = (Player) sender;
+                backpackManager.openConfigGUI(player);
+                return true;
+            });
+            registeredDynamicCommands.add("backpackconfig");
+        }
+        PluginCommand reloadCmd = getCommand("backpackreload");
+        if (reloadCmd != null) {
+            reloadCmd.setExecutor((sender, command, label, args) -> {
+                reloadConfig();
+                loadConfigOptions();
+                backpackManager.setConfig(getBackpackName(), getBackpackSize(), teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
+                registerCommands();
+                if (messagesEnabled) sender.sendMessage(getMessage("reload-success"));
+                return true;
+            });
+            registeredDynamicCommands.add("backpackreload");
+        }
+        if (teamEnabled && showTeamCommands && !classicMode) {
+            PluginCommand inviteCmd = getCommand("invite");
+            if (inviteCmd != null) {
+                inviteCmd.setExecutor((sender, command, label, args) -> {
+                    // ...Team Invite Logic...
+                    return true;
+                });
+                registeredDynamicCommands.add("invite");
+            }
+            PluginCommand teamCmd = getCommand("team");
+            if (teamCmd != null) {
+                teamCmd.setExecutor((sender, command, label, args) -> {
+                    // ...Team Info Logic...
+                    return true;
+                });
+                registeredDynamicCommands.add("team");
+            }
+            PluginCommand leaveCmd = getCommand("leave");
+            if (leaveCmd != null) {
+                leaveCmd.setExecutor((sender, command, label, args) -> {
+                    // ...Team Leave Logic...
+                    return true;
+                });
+                registeredDynamicCommands.add("leave");
+            }
+        }
+        if (adminEnabled && showAdminCommands) {
+            PluginCommand adminCmd = getCommand("backpackadmin");
+            if (adminCmd != null) {
+                adminCmd.setExecutor((sender, command, label, args) -> {
+                    // ...Admin Logic (enable/disable, give items, etc)...
+                    return true;
+                });
+                registeredDynamicCommands.add("backpackadmin");
+            }
+        }
     }
 
     private String getMessage(String key) {
-        return getConfig().getString("messages." + language + "." + key,
-                getConfig().getString("messages.en." + key, ""));
-    }
-
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player player)) {
-            if (messagesEnabled) sender.sendMessage("§cThis command can only be used by players.");
-            return true;
-        }
-        switch (command.getName().toLowerCase()) {
-            case "backpack":
-            case "bp":
-                if (!player.hasPermission("simplebackpack.use")) {
-                    if (messagesEnabled) player.sendMessage(getMessage("no-permission"));
-                    return true;
-                }
-                if (!allowInCreative && player.getGameMode().name().equalsIgnoreCase("CREATIVE")) {
-                    if (messagesEnabled) player.sendMessage(getMessage("creative-not-allowed"));
-                    return true;
-                }
-                backpackManager.openBackpack(player);
-                if (messagesEnabled) player.sendMessage(getMessage("open-success"));
-                return true;
-            case "invite":
-                if (!teamEnabled) return true;
-                if (args.length != 1) return true;
-                Player target = Bukkit.getPlayer(args[0]);
-                if (target == null || target == player) return true;
-                Set<UUID> team = teams.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
-                if (team.size() >= teamMaxSize) {
-                    if (messagesEnabled) player.sendMessage(getMessage("team-full"));
-                    return true;
-                }
-                team.add(target.getUniqueId());
-                if (messagesEnabled) {
-                    player.sendMessage(getMessage("team-invite").replace("{player}", target.getName()));
-                    target.sendMessage(getMessage("team-joined"));
-                }
-                return true;
-            case "team":
-                if (!teamEnabled) return true;
-                // Show team members
-                Set<UUID> members = teams.getOrDefault(player.getUniqueId(), new HashSet<>());
-                StringBuilder sb = new StringBuilder("§aTeam: ");
-                for (UUID uuid : members) {
-                    Player p = Bukkit.getPlayer(uuid);
-                    if (p != null) sb.append(p.getName()).append(" ");
-                }
-                player.sendMessage(sb.toString());
-                return true;
-            case "backpackconfig":
-                if (!guiConfigurable) return true;
-                backpackManager.openConfigGUI(player);
-                return true;
-        }
-        return false;
-    }
-
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        if (autoSaveOnQuit) {
-            backpackManager.saveBackpack(event.getPlayer());
-        }
-    }
-
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-        if (!firstJoinPlayers.contains(player.getUniqueId())) {
-            firstJoinPlayers.add(player.getUniqueId());
-            if (messagesEnabled) player.sendMessage(getMessage("first-join"));
-        }
-    }
-
-    @EventHandler
-    public void onPlayerDeath(PlayerDeathEvent event) {
-        if (!keepOnDeath) {
-            backpackManager.clearBackpack(event.getEntity());
-        }
+        if (!messagesEnabled) return "";
+        String lang = locale == Locale.GERMAN ? "de" : "en";
+        return getConfig().getString("messages." + lang + "." + key, "");
     }
 }

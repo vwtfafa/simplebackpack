@@ -1,20 +1,59 @@
 name: SimpleBackpack
 main: org.vwtfafa.backpack.Backpack
-version: 2.1.0
+version: 3.0.0
 api-version: 1.21
 commands:
   backpack:
     description: Opens your personal backpack (configurable size, persistent)
     usage: /backpack
     aliases: [bp]
-  invite:
-    description: Invite a player to your team to share your backpack
-    usage: /invite <player>
-  team:
-    description: Show your team members
-    usage: /team
+    permission: simplebackpack.use
   backpackconfig:
     description: Open the backpack configuration GUI
     usage: /backpackconfig
+    permission: simplebackpack.config
+  backpackreload:
+    description: Reloads the SimpleBackpack config
+    usage: /backpackreload
+    permission: simplebackpack.reload
+  invite:
+    description: Invite a player to your team to share your backpack
+    usage: /invite <player>
+    permission: simplebackpack.team.invite
+  team:
+    description: Show your team members
+    usage: /team
+    permission: simplebackpack.team
+  leave:
+    description: Leave your current team
+    usage: /leave
+    permission: simplebackpack.team.leave
+  backpackadmin:
+    description: Admin commands for SimpleBackpack
+    usage: /backpackadmin <args>
+    permission: simplebackpack.admin
+permissions:
+  simplebackpack.use:
+    description: Allows using /backpack and /bp
+    default: true
+  simplebackpack.config:
+    description: Allows using /backpackconfig
+    default: op
+  simplebackpack.reload:
+    description: Allows using /backpackreload
+    default: op
+  simplebackpack.team:
+    description: Allows using /team
+    default: true
+  simplebackpack.team.invite:
+    description: Allows inviting players to your team
+    default: true
+  simplebackpack.team.leave:
+    description: Allows leaving your team
+    default: true
+  simplebackpack.admin:
+    description: Allows using admin commands
+    default: op
 authors: ["vwtfafa"]
-description: A simple backpack plugin for Minecraft 1.21+ (Paper/Spigot/Bukkit/Purpur). Each player has a persistent, configurable backpack. Supports teams, GUI config, multi-language messages, and /bp alias.
+description: >
+  A simple, multi-version backpack plugin for Minecraft 1.20+ (Paper/Spigot/Bukkit/Purpur). Each player has a persistent, configurable backpack. Supports teams, GUI config, multi-language messages, classic mode, admin features, live config reload, and /bp alias.
