@@ -2,3 +2,5 @@
 /.gradle/
 /build/classes/java/main/
 /build/
+.claude
+.idea
