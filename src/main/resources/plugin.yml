@@ -1,0 +1,100 @@
+name: SimpleBackpack
+main: org.vwtfafa.backpack.Backpack
+version: 4.1
+api-version: 1.26
+commands:
+  backpack:
+    description: Opens your personal backpack (configurable size, persistent)
+    usage: /backpack
+    aliases: [bp]
+    permission: simplebackpack.use
+  backpackconfig:
+    description: Open the backpack configuration GUI
+    usage: /backpackconfig
+    permission: simplebackpack.config
+  backpackreload:
+    description: Reloads the SimpleBackpack config
+    usage: /backpackreload
+    permission: simplebackpack.reload
+  invite:
+    description: Invite a player to your team to share your backpack
+    usage: /invite <player>
+    permission: simplebackpack.team.invite
+  team:
+    description: Show your team members
+    usage: /team
+    permission: simplebackpack.team
+  leave:
+    description: Leave your current team
+    usage: /leave
+    permission: simplebackpack.team.leave
+  backpackadmin:
+    description: Admin commands for SimpleBackpack
+    usage: /backpackadmin <args>
+    permission: simplebackpack.admin
+  backpackshare:
+    description: Temporarily share your backpack with another player
+    usage: /backpackshare <player> [durationMinutes]
+    permission: simplebackpack.use
+permissions:
+  simplebackpack.use:
+    description: Allows using /backpack and /bp
+    default: true
+  simplebackpack.config:
+    description: Allows using /backpackconfig
+    default: op
+  simplebackpack.reload:
+    description: Allows using /backpackreload
+    default: op
+  simplebackpack.team:
+    description: Allows using /team
+    default: true
+  simplebackpack.team.invite:
+    description: Allows inviting players to your team
+    default: true
+  simplebackpack.team.leave:
+    description: Allows leaving your team
+    default: true
+  simplebackpack.admin:
+    description: Allows using admin commands
+    default: op
+authors: ["vwtfafa"]
+description: >
+  SimpleBackpack — persistent, configurable player backpacks with a clean vanilla-style GUI.
+
+  Features:
+    - Personal Backpacks: per-player persistent backpacks with configurable size, name and color.
+    - Team Backpacks: create/invite/share backpacks with simple team commands.
+    - Classic Mode: minimal mode with only /backpack and /bp.
+    - Admin Tools: admin GUI, admin insert, live reload and audit logging.
+    - Live Config GUI: change size, color and other options in-game with instant apply.
+    - Multi-language: English and German included; messages fully editable.
+    - Improved Storage: persistent YAML storage (compatible with previous versions) with async saves.
+
+  Commands:
+    - /backpack, /bp — Open personal backpack
+    - /backpackconfig — Open configuration GUI
+    - /backpackreload — Reload plugin configuration
+    - /invite <player> — Invite player to your team
+    - /team — Show your team members
+    - /leave — Leave your team
+    - /backpackadmin gui — Open admin overview GUI
+    - /backpackshare <player> [minutes] — Temporarily share your backpack
+
+  Permissions (defaults shown):
+    - simplebackpack.use (true)
+    - simplebackpack.config (op)
+    - simplebackpack.reload (op)
+    - simplebackpack.team (true)
+    - simplebackpack.team.invite (true)
+    - simplebackpack.team.leave (true)
+    - simplebackpack.admin (op)
+
+  Compatibility:
+    - Platforms: Paper, Spigot, Bukkit, Purpur
+    - Minecraft versions: 1.26+ (compiled against Paper API 26.2-R0.1-SNAPSHOT)
+    - Java: 25 target
+    - `api-version` in this plugin.yml is set to 1.26; servers running 1.26.x are supported.
+
+  Author: vwtfafa
+softdepend: [Vault]

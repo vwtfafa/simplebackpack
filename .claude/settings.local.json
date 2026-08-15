@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew build *)",
+      "WebFetch(domain:jd.papermc.io)",
+      "Bash(dir *)"
+    ]
+  }
+}
