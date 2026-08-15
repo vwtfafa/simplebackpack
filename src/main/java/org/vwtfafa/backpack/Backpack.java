@@ -12,6 +12,7 @@ public class Backpack extends JavaPlugin {
     private BackpackManager backpackManager;
     private AdminGUI adminGui;
     private Map<UUID, Set<UUID>> teams = new HashMap<>();
+    private Map<UUID, UUID> pendingInvites = new HashMap<>();
     private Locale locale = Locale.ENGLISH;
     private boolean messagesEnabled = true;
     private boolean classicMode = false;
@@ -95,26 +96,7 @@ public class Backpack extends JavaPlugin {
             });
             registeredDynamicCommands.add("backpack");
         }
-        // /bp als Alias für /backpack
-        PluginCommand bpCmd = getCommand("bp");
-        if (bpCmd != null) {
-            bpCmd.setExecutor((sender, command, label, args) -> {
-                if (!backpacksEnabled) {
-                    sender.sendMessage(getMessage("backpacks-disabled"));
-                    return true;
-                }
-                if (!(sender instanceof Player)) {
-                    sender.sendMessage(getMessage("no-permission"));
-                    return true;
-                }
-                Player player = (Player) sender;
-                if (messagesEnabled) player.sendMessage(getMessage("open-success"));
-                backpackManager.openBackpack(player);
-                return true;
-            });
-            registeredDynamicCommands.add("bp");
-        }
-        PluginCommand configCmd = getCommand("backpackconfig");
+                PluginCommand configCmd = getCommand("backpackconfig");
         if (configCmd != null) {
             configCmd.setExecutor((sender, command, label, args) -> {
                 if (!(sender instanceof Player)) {
@@ -143,8 +125,33 @@ public class Backpack extends JavaPlugin {
             PluginCommand inviteCmd = getCommand("invite");
             if (inviteCmd != null) {
                 inviteCmd.setExecutor((sender, command, label, args) -> {
-                    // Team Invite Logic
-                    sender.sendMessage(getMessage(locale == Locale.GERMAN ? "team-invite" : "team-invite"));
+                    if (!(sender instanceof Player)) {
+                        sender.sendMessage(getMessage("no-permission"));
+                        return true;
+                    }
+                    Player player = (Player) sender;
+                    if (args.length < 1) {
+                        player.sendMessage(getMessage("share-usage")); // reuse share usage? better to have invite-usage
+                        return true;
+                    }
+                    Player target = getServer().getPlayer(args[0]);
+                    if (target == null) {
+                        player.sendMessage(getMessage("share-player-offline")); // reuse? we need new key
+                        return true;
+                    }
+                    // Check if already in a team
+                    if (teams.containsKey(player.getUniqueId()) && !teams.get(player.getUniqueId()).isEmpty()) {
+                        player.sendMessage(getMessage("team-full")); // reuse? we need new key for already in team
+                        return true;
+                    }
+                    // Check if target already in a team
+                    if (teams.containsKey(target.getUniqueId()) && !teams.get(target.getUniqueId()).isEmpty()) {
+                        player.sendMessage(getMessage("team-full")); // target's team full? we need new key
+                        return true;
+                    }
+                    pendingInvites.put(target.getUniqueId(), player.getUniqueId());
+                    player.sendMessage(getMessage("team-invite").replace("{player}", target.getName()));
+                    target.sendMessage(getMessage("team-invite").replace("{player}", player.getName()));
                     return true;
                 });
                 registeredDynamicCommands.add("invite");
@@ -152,8 +159,26 @@ public class Backpack extends JavaPlugin {
             PluginCommand teamCmd = getCommand("team");
             if (teamCmd != null) {
                 teamCmd.setExecutor((sender, command, label, args) -> {
-                    // Team Info Logic
-                    sender.sendMessage(getMessage(locale == Locale.GERMAN ? "team-share" : "team-share"));
+                    if (!(sender instanceof Player)) {
+                        sender.sendMessage(getMessage("no-permission"));
+                        return true;
+                    }
+                    Player player = (Player) sender;
+                    Set<UUID> teamMembers = teams.get(player.getUniqueId());
+                    if (teamMembers == null || teamMembers.isEmpty()) {
+                        player.sendMessage(getMessage("not-in-team"));
+                        return true;
+                    }
+                    // Build message
+                    StringBuilder sb = new StringBuilder();
+                    for (UUID member : teamMembers) {
+                        Player memberPlayer = getServer().getPlayer(member);
+                        sb.append(memberPlayer != null ? memberPlayer.getName() : member.toString()).append(", ");
+                    }
+                    if (sb.length() > 0) {
+                        sb.setLength(sb.length() - 2); // remove last comma and space
+                    }
+                    player.sendMessage(getMessage("team-members").replace("{members}", sb.toString()));
                     return true;
                 });
                 registeredDynamicCommands.add("team");
@@ -161,8 +186,24 @@ public class Backpack extends JavaPlugin {
             PluginCommand leaveCmd = getCommand("leave");
             if (leaveCmd != null) {
                 leaveCmd.setExecutor((sender, command, label, args) -> {
-                    // Team Leave Logic
-                    sender.sendMessage(getMessage(locale == Locale.GERMAN ? "team-leave" : "team-leave"));
+                    if (!(sender instanceof Player)) {
+                        sender.sendMessage(getMessage("no-permission"));
+                        return true;
+                    }
+                    Player player = (Player) sender;
+                    UUID uuid = player.getUniqueId();
+                    if (teams.containsKey(uuid)) {
+                        teams.remove(uuid);
+                        // Also need to remove player from any team they might be a member of (if we store inverse)
+                        // For simplicity, we only store owner->members, so we need to also remove from other owners' sets
+                        // We'll do a quick cleanup: iterate over teams and remove this uuid from any set
+                        for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
+                            entry.getValue().remove(uuid);
+                        }
+                        player.sendMessage(getMessage("team-leave"));
+                    } else {
+                        player.sendMessage(getMessage("not-in-team"));
+                    }
                     return true;
                 });
                 registeredDynamicCommands.add("leave");

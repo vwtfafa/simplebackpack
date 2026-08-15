@@ -1,7 +1,7 @@
 name: SimpleBackpack
 main: org.vwtfafa.backpack.Backpack
 version: 4.1
-api-version: 1.26
+api-version: 26.2
 commands:
   backpack:
     description: Opens your personal backpack (configurable size, persistent)
@@ -59,6 +59,8 @@ permissions:
     description: Allows using admin commands
     default: op
 authors: ["vwtfafa"]
+softdepend: [Vault]
+
 description: >
   SimpleBackpack — persistent, configurable player backpacks with a clean vanilla-style GUI.
 
@@ -92,9 +94,8 @@ description: >
 
   Compatibility:
     - Platforms: Paper, Spigot, Bukkit, Purpur
-    - Minecraft versions: 1.26+ (compiled against Paper API 26.2-R0.1-SNAPSHOT)
+    - Minecraft versions: 26.2 (compiled against Paper API 26.2-R0.1-SNAPSHOT)
     - Java: 25 target
     - `api-version` in this plugin.yml is set to 1.26; servers running 1.26.x are supported.
 
   Author: vwtfafa
-softdepend: [Vault]
