@@ -15,6 +15,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.ChatColor;
 
 import java.io.FileWriter;
 import java.io.PrintWriter;
@@ -74,6 +75,8 @@ public class BackpackManager implements Listener {
 
     public Inventory getBackpack(Player player) {
         UUID uuid = player.getUniqueId();
+        // Clean up expired shared sessions
+        cleanupExpiredSessions();
         // check if this player has a temporary share to another owner's backpack
         SharedSession session = sharedSessions.get(uuid);
         if (session != null && !session.isExpired()) {
@@ -81,25 +84,65 @@ public class BackpackManager implements Listener {
             return backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         }
         if (teamEnabled && teams.containsKey(uuid) && !teams.get(uuid).isEmpty()) {
-            // Shared team backpack (original behaviour)
-            UUID teamOwner = uuid;
+            // Shared team backpack: find the actual team owner (first member or stored owner)
+            UUID teamOwner = getTeamOwner(uuid);
             Inventory teamInv = backpacks.computeIfAbsent(teamOwner, u -> loadBackpack(teamOwner));
             return teamInv;
         }
         return backpacks.computeIfAbsent(uuid, u -> loadBackpack(uuid));
     }
 
+    /**
+     * Returns the team owner UUID for a given team member.
+     * The owner is the map key whose set contains the member.
+     */
+    private UUID getTeamOwner(UUID member) {
+        for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
+            if (entry.getValue().contains(member)) {
+                return entry.getKey();
+            }
+        }
+        return member; // fallback
+    }
+
+    /**
+     * Removes expired shared sessions from the map.
+     */
+    private void cleanupExpiredSessions() {
+        sharedSessions.entrySet().removeIf(e -> e.getValue().isExpired());
+    }
+
     public void updateBackpackGUI(Player player) {
         // Recreate inventory with new size or name
-        Inventory oldInv = backpacks.get(player.getUniqueId());
+        // Resolve the effective owner to maintain team/share integrity
+        UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
+        Inventory oldInv = backpacks.get(effectiveOwner);
         Inventory newInv = Bukkit.createInventory(null, backpackSize, backpackName);
         if (oldInv != null) {
             for (int i = 0; i < Math.min(oldInv.getSize(), newInv.getSize()); i++) {
                 newInv.setItem(i, oldInv.getItem(i));
             }
         }
-        backpacks.put(player.getUniqueId(), newInv);
+        backpacks.put(effectiveOwner, newInv);
         player.openInventory(newInv);
+    }
+
+    /**
+     * Resolves the effective owner of a player's backpack.
+     * Returns the team owner if the player is in a team, or the session owner if they have a share.
+     * Otherwise returns the player's own UUID.
+     */
+    public UUID resolveEffectiveOwner(UUID playerId) {
+        // Check shared session first
+        SharedSession session = sharedSessions.get(playerId);
+        if (session != null && !session.isExpired()) {
+            return session.getOwner();
+        }
+        // Check team ownership
+        if (teamEnabled && teams.containsKey(playerId) && !teams.get(playerId).isEmpty()) {
+            return getTeamOwner(playerId);
+        }
+        return playerId;
     }
 
     private Inventory loadBackpack(UUID uuid) {
@@ -115,8 +158,10 @@ public class BackpackManager implements Listener {
     }
 
     public void saveBackpack(Player player) {
+        // Resolve the effective owner to save to the correct file
+        UUID owner = resolveEffectiveOwner(player.getUniqueId());
         Inventory inv = getBackpack(player);
-        File file = new File(dataFolder, player.getUniqueId() + ".yml");
+        File file = new File(dataFolder, owner + ".yml");
         YamlConfiguration config = new YamlConfiguration();
         for (int i = 0; i < backpackSize; i++) {
             config.set("slot" + i, inv.getItem(i));
@@ -246,23 +291,21 @@ public class BackpackManager implements Listener {
                     this.backpackName = locale == Locale.GERMAN ? "§bRucksack" : "§bBackpack";
                     saveConfigValue("backpack.name", this.backpackName);
                     updateBackpackGUI(player);
-                    player.sendMessage(locale == Locale.GERMAN ? "Backpack-Name geändert." : "Backpack name changed.");
+                    player.sendMessage(locale == Locale.GERMAN ? "§aRucksack-Name geändert." : "§aBackpack name changed.");
                     break;
                 case 1:
                     // Farbe ändern (cycle: Aqua -> Green -> Red -> Aqua ...)
-                    if (this.backpackName.contains("§b")) this.backpackName = this.backpackName.replace("§b", "§a");
-                    else if (this.backpackName.contains("§a")) this.backpackName = this.backpackName.replace("§a", "§c");
-                    else this.backpackName = "§b" + this.backpackName.replaceAll("§[a-z0-9]", "");
+                    this.backpackName = cycleColor(this.backpackName);
                     saveConfigValue("backpack.name", this.backpackName);
                     updateBackpackGUI(player);
-                    player.sendMessage(locale == Locale.GERMAN ? "Backpack-Farbe geändert." : "Backpack color changed.");
+                    player.sendMessage(locale == Locale.GERMAN ? "§aRucksack-Farbe geändert." : "§aBackpack color changed.");
                     break;
                 case 2:
                     // Größe ändern (cycle)
                     this.backpackSize = (this.backpackSize == 54) ? 9 : this.backpackSize + 9;
                     saveConfigValue("backpack.size", this.backpackSize);
                     updateBackpackGUI(player);
-                    player.sendMessage(locale == Locale.GERMAN ? "Backpack-Größe geändert." : "Backpack size changed.");
+                    player.sendMessage(locale == Locale.GERMAN ? "§aRucksack-Größe geändert." : "§aBackpack size changed.");
                     break;
             }
             player.closeInventory();
@@ -271,18 +314,23 @@ public class BackpackManager implements Listener {
 
     @org.bukkit.event.EventHandler
     public void onInventoryClickGlobal(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player)) return;
         String title = event.getView().getTitle();
         if (title == null) return;
         Player viewer = (Player) event.getWhoClicked();
         // read-only enforcement
         if (readOnlyViewers.contains(viewer.getUniqueId())) {
             event.setCancelled(true);
-            viewer.sendMessage(locale == Locale.GERMAN ? "Nur Vorschau - keine Änderungen erlaubt." : "Preview mode - changes are not allowed.");
+            viewer.sendMessage(locale == Locale.GERMAN ? "§cNur Vorschau - keine Änderungen erlaubt." : "§cPreview mode - changes are not allowed.");
             return;
         }
 
+        // Use plain title for comparison (color codes are stripped from inventory titles in Paper)
+        String plainTitle = ChatColor.stripColor(title);
+        String plainBackpackName = ChatColor.stripColor(backpackName);
+
         // Backpack interactions
-        if (title.equals(backpackName) || title.startsWith("Backpack: ")) {
+        if (plainTitle.equals(plainBackpackName) || plainTitle.startsWith("Backpack: ")) {
             // shift-click one-click transfer: if clicked in player's inventory and shift-click -> move to backpack
             if (event.isShiftClick()) {
                 Inventory clicked = event.getClickedInventory();
@@ -294,8 +342,11 @@ public class BackpackManager implements Listener {
                     for (int i = 0; i < top.getSize(); i++) {
                         if (top.getItem(i) == null || top.getItem(i).getType() == Material.AIR) {
                             top.setItem(i, moving.clone());
-                            // remove one from player inventory slot handling
-                            event.getClickedInventory().remove(moving);
+                            // Remove from the exact clicked slot using index
+                            int clickedSlot = event.getSlot();
+                            if (clickedSlot >= 0 && clickedSlot < clicked.getSize()) {
+                                clicked.setItem(clickedSlot, null);
+                            }
                             event.setCancelled(true);
                             return;
                         }
@@ -362,12 +413,11 @@ public class BackpackManager implements Listener {
             } catch (IllegalArgumentException ignored) {}
         }
         // If this was a normal backpack view, save owner's backpack on close
-        if (title.equals(backpackName)) {
-            // find which owner this view represented (shared session or viewer himself)
-            UUID owner = viewer.getUniqueId();
-            // if viewer has a shared session, owner is session.owner
-            SharedSession session = sharedSessions.get(viewer.getUniqueId());
-            if (session != null && !session.isExpired()) owner = session.getOwner();
+        String plainTitle = ChatColor.stripColor(title);
+        String plainBackpackName = ChatColor.stripColor(backpackName);
+        if (plainTitle.equals(plainBackpackName)) {
+            // find which owner this view represented (shared session, team, or viewer himself)
+            UUID owner = resolveEffectiveOwner(viewer.getUniqueId());
             // save asynchronously
             final UUID saveOwner = owner;
             new BukkitRunnable() {
@@ -387,6 +437,36 @@ public class BackpackManager implements Listener {
         }
     }
 
+    /**
+     * Cycles the color prefix of the backpack name.
+     * Cycle order: §b (aqua) -> §a (green) -> §c (red) -> §b (aqua) ...
+     */
+    private String cycleColor(String name) {
+        // Define the color cycle order
+        String[] colors = {"§b", "§a", "§c"};
+        // Find current color index
+        int currentIdx = -1;
+        for (int i = 0; i < colors.length; i++) {
+            if (name.startsWith(colors[i])) {
+                currentIdx = i;
+                break;
+            }
+        }
+        // Determine next color
+        int nextIdx;
+        if (currentIdx == -1) {
+            nextIdx = 0; // default to aqua if no color found
+        } else {
+            nextIdx = (currentIdx + 1) % colors.length;
+        }
+        // Remove any existing color code prefix and prepend the new one
+        String baseName = name;
+        if (baseName.startsWith("§")) {
+            baseName = baseName.substring(2);
+        }
+        return colors[nextIdx] + baseName;
+    }
+
     private void saveConfigValue(String path, Object value) {
         FileConfiguration config = plugin.getConfig();
         config.set(path, value);
@@ -398,9 +478,9 @@ public class BackpackManager implements Listener {
         UUID uuid = player.getUniqueId();
         if (teams.containsKey(uuid)) {
             teams.remove(uuid);
-            player.sendMessage(locale == Locale.GERMAN ? "Du hast das Team verlassen." : "You have left the team.");
+            player.sendMessage(locale == Locale.GERMAN ? "§aDu hast das Team verlassen." : "§aYou have left the team.");
         } else {
-            player.sendMessage(locale == Locale.GERMAN ? "Du bist in keinem Team." : "You are not in a team.");
+            player.sendMessage(locale == Locale.GERMAN ? "§cDu bist in keinem Team." : "§cYou are not in a team.");
         }
     }
 

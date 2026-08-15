@@ -44,7 +44,7 @@ public class AdminGUI implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!event.getView().getTitle().equals("SimpleBackpack Admin")) return;
+        if (!"SimpleBackpack Admin".equals(event.getView().getTitle())) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player)) return;
         Player admin = (Player) event.getWhoClicked();

@@ -4,6 +4,7 @@ import org.bstats.bukkit.Metrics;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
@@ -131,27 +132,29 @@ public class Backpack extends JavaPlugin {
                     }
                     Player player = (Player) sender;
                     if (args.length < 1) {
-                        player.sendMessage(getMessage("share-usage")); // reuse share usage? better to have invite-usage
+                        player.sendMessage(getMessage("invite-usage"));
                         return true;
                     }
                     Player target = getServer().getPlayer(args[0]);
                     if (target == null) {
-                        player.sendMessage(getMessage("share-player-offline")); // reuse? we need new key
+                        player.sendMessage(getMessage("share-player-offline"));
                         return true;
                     }
                     // Check if already in a team
                     if (teams.containsKey(player.getUniqueId()) && !teams.get(player.getUniqueId()).isEmpty()) {
-                        player.sendMessage(getMessage("team-full")); // reuse? we need new key for already in team
+                        player.sendMessage(getMessage("already-in-team"));
                         return true;
                     }
                     // Check if target already in a team
                     if (teams.containsKey(target.getUniqueId()) && !teams.get(target.getUniqueId()).isEmpty()) {
-                        player.sendMessage(getMessage("team-full")); // target's team full? we need new key
+                        player.sendMessage(getMessage("target-in-team"));
                         return true;
                     }
                     pendingInvites.put(target.getUniqueId(), player.getUniqueId());
-                    player.sendMessage(getMessage("team-invite").replace("{player}", target.getName()));
-                    target.sendMessage(getMessage("team-invite").replace("{player}", player.getName()));
+                    String targetName = target.getName() != null ? target.getName() : target.getUniqueId().toString();
+                    String playerName = player.getName() != null ? player.getName() : player.getUniqueId().toString();
+                    player.sendMessage(getMessage("team-invite").replace("{player}", targetName));
+                    target.sendMessage(getMessage("team-invite-recv").replace("{player}", playerName));
                     return true;
                 });
                 registeredDynamicCommands.add("invite");
@@ -164,21 +167,32 @@ public class Backpack extends JavaPlugin {
                         return true;
                     }
                     Player player = (Player) sender;
-                    Set<UUID> teamMembers = teams.get(player.getUniqueId());
-                    if (teamMembers == null || teamMembers.isEmpty()) {
-                        player.sendMessage(getMessage("not-in-team"));
+                    // Check if team accept is requested
+                    if (args.length > 0 && args[0].equalsIgnoreCase("accept")) {
+                        UUID targetId = player.getUniqueId();
+                        if (pendingInvites.containsKey(targetId)) {
+                            UUID inviterId = pendingInvites.remove(targetId);
+                            // Create team with inviter as owner
+                            Set<UUID> newTeam = new HashSet<>();
+                            newTeam.add(inviterId);
+                            newTeam.add(targetId);
+                            teams.put(inviterId, newTeam);
+                            OfflinePlayer inviterOffline = getServer().getOfflinePlayer(inviterId);
+                            String inviterName = (inviterOffline != null && inviterOffline.getName() != null) ? inviterOffline.getName() : inviterId.toString();
+                            player.sendMessage(getMessage("team-joined").replace("{player}", inviterName));
+                            // Notify inviter if online
+                            Player inviter = getServer().getPlayer(inviterId);
+                            if (inviter != null && messagesEnabled) {
+                                inviter.sendMessage(getMessage("team-joined").replace("{player}", player.getName()));
+                            }
+                        } else {
+                            // Show team members or not in team
+                            showTeamInfo(player);
+                        }
                         return true;
                     }
-                    // Build message
-                    StringBuilder sb = new StringBuilder();
-                    for (UUID member : teamMembers) {
-                        Player memberPlayer = getServer().getPlayer(member);
-                        sb.append(memberPlayer != null ? memberPlayer.getName() : member.toString()).append(", ");
-                    }
-                    if (sb.length() > 0) {
-                        sb.setLength(sb.length() - 2); // remove last comma and space
-                    }
-                    player.sendMessage(getMessage("team-members").replace("{members}", sb.toString()));
+                    // Default: show team info
+                    showTeamInfo(player);
                     return true;
                 });
                 registeredDynamicCommands.add("team");
@@ -192,13 +206,24 @@ public class Backpack extends JavaPlugin {
                     }
                     Player player = (Player) sender;
                     UUID uuid = player.getUniqueId();
-                    if (teams.containsKey(uuid)) {
-                        teams.remove(uuid);
-                        // Also need to remove player from any team they might be a member of (if we store inverse)
-                        // For simplicity, we only store owner->members, so we need to also remove from other owners' sets
-                        // We'll do a quick cleanup: iterate over teams and remove this uuid from any set
-                        for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
-                            entry.getValue().remove(uuid);
+                    // Check if player is in a team (as owner or member)
+                    boolean isInTeam = false;
+                    UUID teamOwner = null;
+                    for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
+                        if (entry.getValue().contains(uuid)) {
+                            isInTeam = true;
+                            teamOwner = entry.getKey();
+                            break;
+                        }
+                    }
+                    if (isInTeam) {
+                        // Remove player from team
+                        if (teams.containsKey(teamOwner)) {
+                            teams.get(teamOwner).remove(uuid);
+                            // If team is empty after removal, remove the team entirely
+                            if (teams.get(teamOwner).isEmpty()) {
+                                teams.remove(teamOwner);
+                            }
                         }
                         player.sendMessage(getMessage("team-leave"));
                     } else {
@@ -229,7 +254,7 @@ public class Backpack extends JavaPlugin {
                         });
                         return true;
                     }
-                    player.sendMessage(getMessage(locale == Locale.GERMAN ? "admin-enabled" : "admin-enabled"));
+                    player.sendMessage(getMessage("admin-enabled"));
                     return true;
                 });
                 registeredDynamicCommands.add("backpackadmin");
@@ -245,12 +270,12 @@ public class Backpack extends JavaPlugin {
                 }
                 Player player = (Player) sender;
                 if (args.length < 1) {
-                    player.sendMessage("Usage: /backpackshare <player> [durationMinutes]");
+                    player.sendMessage(getMessage("share-usage"));
                     return true;
                 }
                 Player target = getServer().getPlayer(args[0]);
                 if (target == null) {
-                    player.sendMessage("Player not online");
+                    player.sendMessage(getMessage("share-player-offline"));
                     return true;
                 }
                 long duration = 60L * 60L * 1000L; // default 1 hour
@@ -258,8 +283,8 @@ public class Backpack extends JavaPlugin {
                     try { duration = Long.parseLong(args[1]) * 60L * 1000L; } catch (NumberFormatException ignored) {}
                 }
                 backpackManager.shareBackpack(player.getUniqueId(), target.getUniqueId(), duration);
-                player.sendMessage("Shared backpack with " + target.getName());
-                target.sendMessage("You have been granted temporary access to " + player.getName() + "'s backpack");
+                player.sendMessage(getMessage("share-success").replace("{player}", target.getName()));
+                target.sendMessage(getMessage("share-received").replace("{player}", player.getName()));
                 return true;
             });
             registeredDynamicCommands.add("backpackshare");
@@ -275,5 +300,44 @@ public class Backpack extends JavaPlugin {
             msg = getConfig().getString("messages.en." + key, "");
         }
         return msg != null ? msg : "";
+    }
+
+    private void showTeamInfo(Player player) {
+        UUID uuid = player.getUniqueId();
+        // Check if player is in a team (as owner or member)
+        UUID teamOwner = null;
+        Set<UUID> teamMembers = null;
+        for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
+            if (entry.getValue().contains(uuid)) {
+                teamOwner = entry.getKey();
+                teamMembers = entry.getValue();
+                break;
+            }
+        }
+        if (teamMembers == null || teamMembers.isEmpty()) {
+            // Check if there's a pending invite
+            if (pendingInvites.containsKey(uuid)) {
+                UUID inviter = pendingInvites.get(uuid);
+                String inviterName = getServer().getOfflinePlayer(inviter).getName();
+                player.sendMessage(getMessage("team-pending").replace("{player}", inviterName));
+            } else {
+                player.sendMessage(getMessage("not-in-team"));
+            }
+            return;
+        }
+        // Build message
+        StringBuilder sb = new StringBuilder();
+        for (UUID member : teamMembers) {
+            Player memberPlayer = getServer().getPlayer(member);
+            String name = memberPlayer != null ? memberPlayer.getName() : member.toString();
+            if (member.equals(teamOwner)) {
+                name += " (L)";
+            }
+            sb.append(name).append(", ");
+        }
+        if (sb.length() > 0) {
+            sb.setLength(sb.length() - 2); // remove last comma and space
+        }
+        player.sendMessage(getMessage("team-members").replace("{members}", sb.toString()));
     }
 }
