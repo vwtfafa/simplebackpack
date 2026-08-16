@@ -40,7 +40,6 @@ public class Backpack extends JavaPlugin {
         loadConfigOptions();
         new Metrics(this, 32528);
         backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teams, teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
-        backpackManager.setConfig(getBackpackName(), getBackpackSize(), teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
         // register commands and admin UI
         registerCommands();
         if (adminEnabled) adminGui = new AdminGUI(backpackManager);

@@ -19,7 +19,8 @@ import org.bukkit.ChatColor;
 
 import java.io.FileWriter;
 import java.io.PrintWriter;
-import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
 
 import java.io.File;
@@ -28,12 +29,12 @@ import java.util.*;
 
 public class BackpackManager implements Listener {
     private JavaPlugin plugin;
-    private Map<UUID, Inventory> backpacks = new HashMap<>();
+    private final Map<UUID, Inventory> backpacks = new ConcurrentHashMap<>();
     private Map<UUID, Set<UUID>> teams;
     private boolean teamEnabled;
     private File dataFolder;
-    private String backpackName;
-    private int backpackSize;
+    private volatile String backpackName;
+    private volatile int backpackSize;
     private boolean classicMode;
     private boolean adminEnabled;
     private boolean liveConfigReload;
@@ -109,7 +110,13 @@ public class BackpackManager implements Listener {
      * Removes expired shared sessions from the map.
      */
     private void cleanupExpiredSessions() {
-        sharedSessions.entrySet().removeIf(e -> e.getValue().isExpired());
+        Iterator<Map.Entry<UUID, SharedSession>> it = sharedSessions.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, SharedSession> entry = it.next();
+            if (entry.getValue().isExpired()) {
+                it.remove();
+            }
+        }
     }
 
     public void updateBackpackGUI(Player player) {
@@ -169,12 +176,12 @@ public class BackpackManager implements Listener {
         try {
             config.save(file);
         } catch (IOException e) {
-            e.printStackTrace();
+            plugin.getLogger().severe("Failed to save backpack for player " + player.getName() + ": " + e.getMessage());
         }
     }
 
     public void saveAllBackpacks() {
-        for (UUID uuid : backpacks.keySet()) {
+        for (UUID uuid : new HashSet<>(backpacks.keySet())) {
             File file = new File(dataFolder, uuid + ".yml");
             YamlConfiguration config = new YamlConfiguration();
             Inventory inv = backpacks.get(uuid);
@@ -184,7 +191,7 @@ public class BackpackManager implements Listener {
             try {
                 config.save(file);
             } catch (IOException e) {
-                e.printStackTrace();
+                plugin.getLogger().severe("Failed to save backpack for UUID " + uuid + ": " + e.getMessage());
             }
         }
     }
@@ -192,9 +199,11 @@ public class BackpackManager implements Listener {
     // Audit logging
     private void logAudit(String line) {
         try (FileWriter fw = new FileWriter(auditLogFile, true); PrintWriter pw = new PrintWriter(fw)) {
-            String ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            String ts = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now());
             pw.println(ts + " - " + line);
-        } catch (IOException ignored) {}
+        } catch (IOException e) {
+            plugin.getLogger().severe("Failed to write to audit log: " + e.getMessage());
+        }
     }
 
     public JavaPlugin getPlugin() {
@@ -214,8 +223,8 @@ public class BackpackManager implements Listener {
                 } catch (Exception ignored) {}
             }
         }
-        // also include in-memory keys
-        result.addAll(backpacks.keySet());
+        // also include in-memory keys (iterate over copy to avoid concurrent modification)
+        result.addAll(new HashSet<>(backpacks.keySet()));
         return result;
     }
 
@@ -282,7 +291,7 @@ public class BackpackManager implements Listener {
 
     @org.bukkit.event.EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (event.getView().getTitle().equals("Backpack Config")) {
+        if (ChatColor.stripColor(event.getView().getTitle()).equals("Backpack Config")) {
             event.setCancelled(true);
             Player player = (Player) event.getWhoClicked();
             switch (event.getSlot()) {
@@ -315,7 +324,7 @@ public class BackpackManager implements Listener {
     @org.bukkit.event.EventHandler
     public void onInventoryClickGlobal(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player)) return;
-        String title = event.getView().getTitle();
+        String title = ChatColor.stripColor(event.getView().getTitle());
         if (title == null) return;
         Player viewer = (Player) event.getWhoClicked();
         // read-only enforcement
@@ -351,6 +360,10 @@ public class BackpackManager implements Listener {
                             return;
                         }
                     }
+                    // If no empty slot found, notify player
+                    viewer.sendMessage(locale == Locale.GERMAN ?
+                        "§cDer Rucksack ist voll!" :
+                        "§cThe backpack is full!");
                 }
             }
         }
@@ -358,7 +371,7 @@ public class BackpackManager implements Listener {
 
     @org.bukkit.event.EventHandler
     public void onInventoryCloseEvent(InventoryCloseEvent event) {
-        String title = event.getView().getTitle();
+        String title = ChatColor.stripColor(event.getView().getTitle());
         if (title == null) return;
         Player viewer = (Player) event.getPlayer();
         // clean up preview markers
