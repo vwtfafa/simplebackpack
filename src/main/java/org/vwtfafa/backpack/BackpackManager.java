@@ -70,6 +70,7 @@ public class BackpackManager implements Listener {
             if (!this.auditLogFile.exists()) this.auditLogFile.createNewFile();
         } catch (Exception ignored) {}
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        this.configCache = plugin.getConfig();
     }
 
     public void openBackpack(Player player) {

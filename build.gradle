@@ -96,8 +96,8 @@ checkstyle {
 spotbugs {
     toolVersion = "4.10.3"
     ignoreFailures = false
-    effort = "max"
-    reportLevel = "low"
+    effort = com.github.spotbugs.snom.Effort.MAX
+    reportLevel = com.github.spotbugs.snom.ReportLevel.LOW
     reportsDir = file("build/reports/spotbugs")
     includeFilter = file("config/spotbugs/spotbugs.xml")
 }
