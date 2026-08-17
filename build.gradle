@@ -97,7 +97,7 @@ spotbugs {
     ignoreFailures = false
 
     effort = Effort.MAX
-    reportLevel = Confidence.LOW
+    reportLevel = "LOW"
 
     reportsDir = file("build/reports/spotbugs")
     includeFilter = file("config/spotbugs/spotbugs.xml")
