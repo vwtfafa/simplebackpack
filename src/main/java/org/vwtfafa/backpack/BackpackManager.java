@@ -46,7 +46,7 @@ public class BackpackManager implements Listener {
     private boolean keepContentsOnDeath;
     private Locale locale;
     private FileConfiguration configCache;
-    private final Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
+    Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
     private final Set<UUID> readOnlyViewers = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final File auditLogFile;
 
@@ -113,7 +113,7 @@ public class BackpackManager implements Listener {
     /**
      * Removes expired shared sessions from the map.
      */
-    private void cleanupExpiredSessions() {
+    void cleanupExpiredSessions() {
         Iterator<Map.Entry<UUID, SharedSession>> it = sharedSessions.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<UUID, SharedSession> entry = it.next();
