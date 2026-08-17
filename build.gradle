@@ -24,7 +24,7 @@ repositories {
 dependencies {
     // Keep the exact Paper API version used by the project
     compileOnly("io.papermc.paper:paper-api:26.2.build.112-stable")
-    implementation 'org.json:json:20231013'
+    implementation 'org.json:json:20260814'
     implementation("org.bstats:bstats-bukkit:3.2.1")
     // No new dependencies introduced – existing ones are preserved
 }
