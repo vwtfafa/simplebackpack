@@ -34,6 +34,11 @@ show-admin-commands: true     # Show/hide all admin commands
 # === Feature Flags ===
 enable-sharing: true         # Enable /backpackshare command and temporary sharing
 
+# === Update Checker ===
+update-checker:
+  notify-ops: true           # Notify operators when an update is available
+  notify-chat: true          # Send notification in chat
+
 # === Messaging ===
 messages-enabled: true        # If false, no messages will be sent to players
 

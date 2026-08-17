@@ -1,0 +1,25 @@
+-bstats integartion plugin id 32528  lock-end stuff/src/main/java/org/vwtfafa/lockEnd/MetricsManager.java
+-update checker lock-end stuff/src/main/java/org/vwtfafa/lockEnd/UpdateChecker.java
+gradel 9.7 support und build fix 
+worklofs für relse lock-end stuff/.github/workflows
+
+dependbot (
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+)
+-relse tempalt lock-end stuff/.github/RELEASE_TEMPLATE.md
+
+- fpr den checekr und so lock-end stuff/build.gradle

@@ -4,10 +4,15 @@ import org.bstats.bukkit.Metrics;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.bukkit.OfflinePlayer;
 
 public class Backpack extends JavaPlugin {
     private BackpackManager backpackManager;
@@ -43,6 +48,8 @@ public class Backpack extends JavaPlugin {
         // register commands and admin UI
         registerCommands();
         if (adminEnabled) adminGui = new AdminGUI(backpackManager);
+        // Initialize update checker
+        new UpdateChecker(this).checkForUpdates();
     }
 
     private void unregisterDynamicCommands() {

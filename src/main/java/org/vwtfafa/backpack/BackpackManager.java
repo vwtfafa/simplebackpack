@@ -1,7 +1,6 @@
 package org.vwtfafa.backpack;
 
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -13,8 +12,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.Listener;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.inventory.InventoryView;
-import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.ChatColor;
 
 import java.io.FileWriter;
@@ -25,7 +22,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 public class BackpackManager implements Listener {
     private JavaPlugin plugin;

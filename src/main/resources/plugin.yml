@@ -1,6 +1,6 @@
 name: SimpleBackpack
 main: org.vwtfafa.backpack.Backpack
-version: 4.1
+version: 5.0
 api-version: 26.2
 commands:
   backpack:
@@ -91,11 +91,4 @@ description: >
     - simplebackpack.team.invite (true)
     - simplebackpack.team.leave (true)
     - simplebackpack.admin (op)
-
-  Compatibility:
-    - Platforms: Paper, Spigot, Bukkit, Purpur
-    - Minecraft versions: 26.2 (compiled against Paper API 26.2-R0.1-SNAPSHOT)
-    - Java: 25 target
-    - `api-version` in this plugin.yml is set to 1.26; servers running 1.26.x are supported.
-
   Author: vwtfafa
