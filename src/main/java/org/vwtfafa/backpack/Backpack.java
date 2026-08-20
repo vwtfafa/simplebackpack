@@ -13,10 +13,15 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.configuration.file.YamlConfiguration;
+
+import java.io.File;
+import java.io.IOException;
 
 public class Backpack extends JavaPlugin implements Listener {
     private BackpackManager backpackManager;
@@ -40,17 +45,21 @@ public class Backpack extends JavaPlugin implements Listener {
     private int teamMaxSize = 5;
 
     private final Set<String> registeredDynamicCommands = new HashSet<>();
+    private File teamsFile;
 
 
     @Override
     public void onDisable() {
         if (backpackManager != null) backpackManager.saveAllBackpacks();
+        saveTeams();
         unregisterDynamicCommands();
     }
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        teamsFile = new File(getDataFolder(), "teams.yml");
+        loadTeams();
         loadConfigOptions();
         new Metrics(this, 32528);
         getLogger().info("bStats metrics enabled (ID: 32528)");
@@ -185,11 +194,8 @@ public class Backpack extends JavaPlugin implements Listener {
                         return true;
                     }
                     // Check if already in a team
-                    if (teams.containsKey(player.getUniqueId()) && !teams.get(player.getUniqueId()).isEmpty()) {
-                        player.sendMessage(getMessage("already-in-team"));
-                        return true;
-                    }
-                    if (teams.containsKey(player.getUniqueId()) && teams.get(player.getUniqueId()).size() >= teamMaxSize) {
+                    UUID owner = findTeamOwner(player.getUniqueId());
+                    if (owner != null && teams.get(owner).size() >= teamMaxSize) {
                         player.sendMessage(getMessage("team-full"));
                         return true;
                     }
@@ -224,11 +230,14 @@ public class Backpack extends JavaPlugin implements Listener {
                         UUID targetId = player.getUniqueId();
                         if (pendingInvites.containsKey(targetId)) {
                             UUID inviterId = pendingInvites.remove(targetId);
-                            // Create team with inviter as owner
-                            Set<UUID> newTeam = new HashSet<>();
-                            newTeam.add(inviterId);
+                            UUID owner = findTeamOwner(inviterId);
+                            Set<UUID> newTeam = owner == null ? new HashSet<>() : teams.get(owner);
+                            if (owner == null) owner = inviterId;
+                            newTeam.add(owner);
                             newTeam.add(targetId);
-                            teams.put(inviterId, newTeam);
+                            teams.remove(inviterId);
+                            teams.put(owner, newTeam);
+                            saveTeams();
                             OfflinePlayer inviterOffline = getServer().getOfflinePlayer(inviterId);
                             String inviterName = (inviterOffline != null && inviterOffline.getName() != null) ? inviterOffline.getName() : inviterId.toString();
                             player.sendMessage(getMessage("team-joined").replace("{player}", inviterName));
@@ -275,11 +284,16 @@ public class Backpack extends JavaPlugin implements Listener {
                     if (isInTeam) {
                         // Remove player from team
                         if (teams.containsKey(teamOwner)) {
-                            teams.get(teamOwner).remove(uuid);
-                            // If team is empty after removal, remove the team entirely
-                            if (teams.get(teamOwner).isEmpty()) {
+                            Set<UUID> members = teams.get(teamOwner);
+                            members.remove(uuid);
+                            if (members.isEmpty()) {
                                 teams.remove(teamOwner);
+                            } else if (uuid.equals(teamOwner)) {
+                                UUID newOwner = members.iterator().next();
+                                teams.remove(teamOwner);
+                                teams.put(newOwner, members);
                             }
+                            saveTeams();
                         }
                         player.sendMessage(getMessage("team-leave"));
                     } else {
@@ -410,6 +424,50 @@ public class Backpack extends JavaPlugin implements Listener {
             sb.setLength(sb.length() - 2); // remove last comma and space
         }
         player.sendMessage(getMessage("team-members").replace("{members}", sb.toString()));
+    }
+
+    private UUID findTeamOwner(UUID member) {
+        for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
+            if (entry.getValue().contains(member)) return entry.getKey();
+        }
+        return null;
+    }
+
+    private void loadTeams() {
+        teams.clear();
+        if (teamsFile == null || !teamsFile.exists()) return;
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(teamsFile);
+        for (String ownerKey : config.getStringList("teams.owners")) {
+            try {
+                UUID owner = UUID.fromString(ownerKey);
+                Set<UUID> members = new HashSet<>();
+                for (String memberKey : config.getStringList("teams." + ownerKey)) {
+                    members.add(UUID.fromString(memberKey));
+                }
+                members.add(owner);
+                teams.put(owner, members);
+            } catch (IllegalArgumentException ignored) {
+                getLogger().warning("Ignoring invalid team entry: " + ownerKey);
+            }
+        }
+    }
+
+    private void saveTeams() {
+        if (teamsFile == null) return;
+        YamlConfiguration config = new YamlConfiguration();
+        List<String> owners = new java.util.ArrayList<>();
+        for (UUID owner : teams.keySet()) {
+            owners.add(owner.toString());
+            List<String> members = new java.util.ArrayList<>();
+            for (UUID member : teams.get(owner)) members.add(member.toString());
+            config.set("teams." + owner, members);
+        }
+        config.set("teams.owners", owners);
+        try {
+            config.save(teamsFile);
+        } catch (IOException e) {
+            getLogger().log(java.util.logging.Level.SEVERE, "Failed to save teams", e);
+        }
     }
 
     @EventHandler
