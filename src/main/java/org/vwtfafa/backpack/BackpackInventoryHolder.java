@@ -6,7 +6,7 @@ import org.bukkit.inventory.InventoryHolder;
 import java.util.UUID;
 
 final class BackpackInventoryHolder implements InventoryHolder {
-    enum Type { BACKPACK, ADMIN, CONFIG }
+    enum Type { BACKPACK, ADMIN, ADMIN_LIST, CONFIG }
 
     private final Type type;
     private final UUID owner;
@@ -24,6 +24,10 @@ final class BackpackInventoryHolder implements InventoryHolder {
 
     static BackpackInventoryHolder admin(UUID owner, boolean preview) {
         return new BackpackInventoryHolder(Type.ADMIN, owner, preview);
+    }
+
+    static BackpackInventoryHolder adminList() {
+        return new BackpackInventoryHolder(Type.ADMIN_LIST, null, false);
     }
 
     static BackpackInventoryHolder config() {

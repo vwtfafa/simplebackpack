@@ -24,7 +24,7 @@ public class AdminGUI implements Listener {
     }
 
     public void openAdminGUI(Player admin) {
-        Inventory gui = Bukkit.createInventory(admin, 54, "SimpleBackpack Admin");
+        Inventory gui = Bukkit.createInventory(BackpackInventoryHolder.adminList(), 54, "SimpleBackpack Admin");
         // populate with known backpacks
         for (UUID uuid : manager.listKnownBackpacks()) {
             OfflinePlayer op = Bukkit.getOfflinePlayer(uuid);
@@ -44,7 +44,8 @@ public class AdminGUI implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!"SimpleBackpack Admin".equals(event.getView().getTitle())) return;
+        if (!(event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)
+            || holder.getType() != BackpackInventoryHolder.Type.ADMIN_LIST) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player)) return;
         Player admin = (Player) event.getWhoClicked();
