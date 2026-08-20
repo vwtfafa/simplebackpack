@@ -53,7 +53,6 @@ public class BackpackManager implements Listener {
     public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, Map<UUID, Set<UUID>> teams, boolean teamEnabled, boolean classicMode, boolean adminEnabled, boolean liveConfigReload, boolean showTeamCommands, boolean showAdminCommands, boolean keepContentsOnDeath, Locale locale) {
         this.plugin = plugin;
         this.backpackName = backpackName;
-        this.backpackSize = backpackSize;
         this.teams = teams;
         this.teamEnabled = teamEnabled;
         this.classicMode = classicMode;
@@ -71,6 +70,7 @@ public class BackpackManager implements Listener {
         } catch (Exception ignored) {}
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         this.configCache = plugin.getConfig();
+        this.backpackSize = validateBackpackSize(backpackSize);
     }
 
     public void openBackpack(Player player) {
@@ -488,6 +488,18 @@ public class BackpackManager implements Listener {
         FileConfiguration config = plugin.getConfig();
         config.set(path, value);
         plugin.saveConfig();
+    }
+
+    /**
+     * Validates that backpack size is a multiple of 9 and within reasonable bounds.
+     * @param size the proposed size
+     * @return validated size (multiple of 9, between 9 and 54)
+     */
+    private int validateBackpackSize(int size) {
+        // Ensure size is multiple of 9 (valid inventory sizes)
+        int validated = Math.max(9, (size / 9) * 9);
+        // Cap at 6 rows (54 slots) as that's the maximum for player inventories
+        return Math.min(validated, 54);
     }
 
     // Team verlassen
