@@ -11,8 +11,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.ChatColor;
 
 import java.io.FileWriter;
 import java.io.PrintWriter;
@@ -22,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Locale;
@@ -47,7 +44,6 @@ public class BackpackManager implements Listener {
     private Locale locale;
     private FileConfiguration configCache;
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
-    private final Set<UUID> readOnlyViewers = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final File auditLogFile;
 
     public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, Map<UUID, Set<UUID>> teams, boolean teamEnabled, boolean classicMode, boolean adminEnabled, boolean liveConfigReload, boolean showTeamCommands, boolean showAdminCommands, boolean keepContentsOnDeath, Locale locale) {
@@ -128,7 +124,7 @@ public class BackpackManager implements Listener {
         // Resolve the effective owner to maintain team/share integrity
         UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
         Inventory oldInv = backpacks.get(effectiveOwner);
-        Inventory newInv = Bukkit.createInventory(null, backpackSize, backpackName);
+        Inventory newInv = Bukkit.createInventory(BackpackInventoryHolder.backpack(effectiveOwner), backpackSize, backpackName);
         if (oldInv != null) {
             for (int i = 0; i < Math.min(oldInv.getSize(), newInv.getSize()); i++) {
                 newInv.setItem(i, oldInv.getItem(i));
@@ -158,7 +154,7 @@ public class BackpackManager implements Listener {
 
     private Inventory loadBackpack(UUID uuid) {
         File file = new File(dataFolder, uuid + ".yml");
-        Inventory inv = Bukkit.createInventory(null, backpackSize, backpackName);
+        Inventory inv = Bukkit.createInventory(BackpackInventoryHolder.backpack(uuid), backpackSize, backpackName);
         if (file.exists()) {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
             for (int i = 0; i < backpackSize; i++) {
@@ -241,10 +237,8 @@ public class BackpackManager implements Listener {
     public void openForAdmin(UUID owner, Player admin, boolean preview) {
         Inventory inv = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         // open a new inventory view for admin with same contents
-        Inventory view = Bukkit.createInventory(admin, inv.getSize(), "Backpack: " + owner.toString());
+        Inventory view = Bukkit.createInventory(BackpackInventoryHolder.admin(owner, preview), inv.getSize(), "Backpack: " + owner.toString());
         for (int i = 0; i < inv.getSize(); i++) view.setItem(i, inv.getItem(i));
-        // register read-only if preview
-        if (preview) readOnlyViewers.add(admin.getUniqueId());
         admin.openInventory(view);
         logAudit("ADMIN_OPEN " + admin.getName() + " -> " + owner.toString() + " preview=" + preview);
     }
@@ -280,7 +274,7 @@ public class BackpackManager implements Listener {
     }
 
     public void openConfigGUI(Player player) {
-        Inventory gui = Bukkit.createInventory(player, 9, "Backpack Config");
+        Inventory gui = Bukkit.createInventory(BackpackInventoryHolder.config(), 9, "Backpack Config");
         // Slot 0: Change Name
         ItemStack nameItem = new ItemStack(Material.NAME_TAG);
         gui.setItem(0, nameItem);
@@ -295,7 +289,8 @@ public class BackpackManager implements Listener {
 
     @org.bukkit.event.EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (ChatColor.stripColor(event.getView().getTitle()).equals("Backpack Config")) {
+        if (event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder
+            && holder.getType() == BackpackInventoryHolder.Type.CONFIG) {
             event.setCancelled(true);
             Player player = (Player) event.getWhoClicked();
             switch (event.getSlot()) {
@@ -328,22 +323,20 @@ public class BackpackManager implements Listener {
     @org.bukkit.event.EventHandler
     public void onInventoryClickGlobal(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player)) return;
-        String title = ChatColor.stripColor(event.getView().getTitle());
-        if (title == null) return;
         Player viewer = (Player) event.getWhoClicked();
-        // read-only enforcement
-        if (readOnlyViewers.contains(viewer.getUniqueId())) {
+        if (!(event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)
+                || (holder.getType() != BackpackInventoryHolder.Type.BACKPACK
+                && holder.getType() != BackpackInventoryHolder.Type.ADMIN)) {
+            return;
+        }
+        if (holder.isPreview()) {
             event.setCancelled(true);
             viewer.sendMessage(locale == Locale.GERMAN ? "§cNur Vorschau - keine Änderungen erlaubt." : "§cPreview mode - changes are not allowed.");
             return;
         }
 
-        // Use plain title for comparison (color codes are stripped from inventory titles in Paper)
-        String plainTitle = ChatColor.stripColor(title);
-        String plainBackpackName = ChatColor.stripColor(backpackName);
-
-        // Backpack interactions
-        if (plainTitle.equals(plainBackpackName) || plainTitle.startsWith("Backpack: ")) {
+        if (holder.getType() == BackpackInventoryHolder.Type.BACKPACK
+                || holder.getType() == BackpackInventoryHolder.Type.ADMIN) {
             // shift-click one-click transfer: if clicked in player's inventory and shift-click -> move to backpack
             if (event.isShiftClick()) {
                 Inventory clicked = event.getClickedInventory();
@@ -375,18 +368,12 @@ public class BackpackManager implements Listener {
 
     @org.bukkit.event.EventHandler
     public void onInventoryCloseEvent(InventoryCloseEvent event) {
-        String title = ChatColor.stripColor(event.getView().getTitle());
-        if (title == null) return;
         Player viewer = (Player) event.getPlayer();
-        // clean up preview markers
-        if (readOnlyViewers.contains(viewer.getUniqueId())) {
-            readOnlyViewers.remove(viewer.getUniqueId());
-        }
+        if (!(event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)) return;
+        if (holder.getType() == BackpackInventoryHolder.Type.CONFIG || holder.isPreview()) return;
         // If admin was editing a "Backpack: <uuid>" view, persist changes
-        if (title.startsWith("Backpack: ")) {
-            String uuidStr = title.substring("Backpack: ".length()).trim();
-            try {
-                UUID owner = UUID.fromString(uuidStr);
+        if (holder.getType() == BackpackInventoryHolder.Type.ADMIN) {
+                UUID owner = holder.getOwner();
                 Inventory top = event.getInventory();
                 // apply contents back to owner's stored backpack
                 Inventory stored = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
@@ -412,46 +399,40 @@ public class BackpackManager implements Listener {
                     } catch (IOException ignored) {}
                 }
 
-                // save asynchronously
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            File file = new File(dataFolder, owner + ".yml");
-                            YamlConfiguration cfg = new YamlConfiguration();
-                            for (int i = 0; i < stored.getSize(); i++) cfg.set("slot" + i, stored.getItem(i));
-                            cfg.save(file);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }.runTaskAsynchronously(plugin);
+                saveInventoryAsync(owner, snapshot(stored), "admin");
                 logAudit("ADMIN_SAVE " + viewer.getName() + " -> " + owner.toString());
-            } catch (IllegalArgumentException ignored) {}
+                return;
         }
         // If this was a normal backpack view, save owner's backpack on close
-        String plainTitle = ChatColor.stripColor(title);
-        String plainBackpackName = ChatColor.stripColor(backpackName);
-        if (plainTitle.equals(plainBackpackName)) {
-            // find which owner this view represented (shared session, team, or viewer himself)
-            UUID owner = resolveEffectiveOwner(viewer.getUniqueId());
-            // save asynchronously
-            final UUID saveOwner = owner;
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    try {
-                        Inventory stored = backpacks.computeIfAbsent(saveOwner, u -> loadBackpack(saveOwner));
-                        File file = new File(dataFolder, saveOwner + ".yml");
-                        YamlConfiguration cfg = new YamlConfiguration();
-                        for (int i = 0; i < stored.getSize(); i++) cfg.set("slot" + i, stored.getItem(i));
-                        cfg.save(file);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }.runTaskAsynchronously(plugin);
+        if (holder.getType() == BackpackInventoryHolder.Type.BACKPACK) {
+            saveInventoryAsync(holder.getOwner(), snapshot(event.getInventory()), "close");
         }
+    }
+
+    private ItemStack[] snapshot(Inventory inventory) {
+        ItemStack[] contents = inventory.getContents();
+        ItemStack[] copy = new ItemStack[contents.length];
+        for (int i = 0; i < contents.length; i++) {
+            copy[i] = contents[i] == null ? null : contents[i].clone();
+        }
+        return copy;
+    }
+
+    private void saveInventoryAsync(UUID owner, ItemStack[] contents, String source) {
+        new org.bukkit.scheduler.BukkitRunnable() {
+            @Override
+            public void run() {
+                try {
+                    File file = new File(dataFolder, owner + ".yml");
+                    YamlConfiguration cfg = new YamlConfiguration();
+                    for (int i = 0; i < contents.length; i++) cfg.set("slot" + i, contents[i]);
+                    cfg.save(file);
+                } catch (IOException e) {
+                    plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                            "Failed to save backpack " + owner + " from " + source, e);
+                }
+            }
+        }.runTaskAsynchronously(plugin);
     }
 
     /**
