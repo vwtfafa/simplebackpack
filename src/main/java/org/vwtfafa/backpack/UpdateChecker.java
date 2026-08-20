@@ -6,11 +6,12 @@ import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLConnection;
 
 /**
  * Checks for updates on GitHub and notifies operators.
@@ -34,25 +35,26 @@ public class UpdateChecker {
             try {
                 // Fetch the latest version from GitHub API
                 URL url = new URL("https://api.github.com/repos/vwtfafa/SimpleBackpack/releases/latest");
-                URLConnection connection = url.openConnection();
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setConnectTimeout(5000);
                 connection.setReadTimeout(5000);
-
-                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-                String line;
-                StringBuilder response = new StringBuilder();
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
+                connection.setRequestProperty("User-Agent", "SimpleBackpack/" + currentVersion);
+                connection.setRequestProperty("Accept", "application/vnd.github+json");
+                if (connection.getResponseCode() / 100 != 2) {
+                    throw new java.io.IOException("GitHub returned HTTP " + connection.getResponseCode());
                 }
-                reader.close();
 
-                // Parse the version from the JSON response
-                String json = response.toString();
-                int tagIndex = json.indexOf("\"tag_name\":\"");
-                if (tagIndex != -1) {
-                    int startIndex = tagIndex + 12;
-                    int endIndex = json.indexOf("\"", startIndex);
-                    latestVersion = json.substring(startIndex, endIndex);
+                StringBuilder response = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        response.append(line);
+                    }
+                }
+
+                JSONObject json = new JSONObject(response.toString());
+                if (json.has("tag_name")) {
+                    latestVersion = json.getString("tag_name");
                     updateAvailable = isNewerVersion(latestVersion, currentVersion);
 
                     if (updateAvailable) {
