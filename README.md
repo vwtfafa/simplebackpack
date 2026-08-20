@@ -1,6 +1,6 @@
 # SimpleBackpack
 
-A persistent, configurable backpack plugin for Minecraft (Paper/Spigot/Bukkit/Purpur).
+A persistent, configurable backpack plugin for Minecraft Paper.
 
 ## Features
 
@@ -129,15 +129,13 @@ branches:
 
 | Platform | Version | Support |
 | -------- | ------- | ------- |
-| **Paper** | 26.2+ | ✅ Recommended |
-| **Purpur** | 26.2+ | ✅ Works |
-| **Spigot** | 26.2+ | ✅ Works |
-| **Bukkit** | 26.2+ | ✅ Works |
+| **Paper** | 26.2+ | ✅ Supported |
+| **Purpur** | 26.2+ | ⚠️ Expected to work, not separately tested |
 
 ## Requirements
 
 - Java 25
-- Paper/Spigot/Bukkit/Purpur 1.21.10+ (Paper API 26.2)
+- Paper 26.2+
 - GitHub access (for update checker)
 
 ## Author

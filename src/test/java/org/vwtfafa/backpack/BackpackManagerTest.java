@@ -1,5 +1,6 @@
 package org.vwtfafa.backpack;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -11,7 +12,24 @@ class BackpackManagerTest {
 
     @Test
     void testResolveEffectiveOwnerWithoutSession() {
-        assertTrue(true);
+        UUID player = UUID.randomUUID();
+        SharedSession session = new SharedSession(player, System.currentTimeMillis() + 1000);
+
+        assertEquals(player, session.getOwner());
+        assertFalse(session.isExpired());
+        }
+
+        @Test
+        void inventoryHoldersExposeTheirPurpose() {
+        UUID owner = UUID.randomUUID();
+
+        assertEquals(BackpackInventoryHolder.Type.BACKPACK,
+            BackpackInventoryHolder.backpack(owner).getType());
+        assertEquals(BackpackInventoryHolder.Type.ADMIN,
+            BackpackInventoryHolder.admin(owner, true).getType());
+        assertTrue(BackpackInventoryHolder.admin(owner, true).isPreview());
+        assertEquals(BackpackInventoryHolder.Type.CONFIG,
+            BackpackInventoryHolder.config().getType());
     }
 
     @Test
