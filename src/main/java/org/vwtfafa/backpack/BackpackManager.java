@@ -26,6 +26,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 public class BackpackManager implements Listener {
     private JavaPlugin plugin;
@@ -45,6 +47,7 @@ public class BackpackManager implements Listener {
     private FileConfiguration configCache;
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
     private final File auditLogFile;
+    private final Map<UUID, Object> saveLocks = new ConcurrentHashMap<>();
 
     public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, Map<UUID, Set<UUID>> teams, boolean teamEnabled, boolean classicMode, boolean adminEnabled, boolean liveConfigReload, boolean showTeamCommands, boolean showAdminCommands, boolean keepContentsOnDeath, Locale locale) {
         this.plugin = plugin;
@@ -168,31 +171,13 @@ public class BackpackManager implements Listener {
         // Resolve the effective owner to save to the correct file
         UUID owner = resolveEffectiveOwner(player.getUniqueId());
         Inventory inv = getBackpack(player);
-        File file = new File(dataFolder, owner + ".yml");
-        YamlConfiguration config = new YamlConfiguration();
-        for (int i = 0; i < backpackSize; i++) {
-            config.set("slot" + i, inv.getItem(i));
-        }
-        try {
-            config.save(file);
-        } catch (IOException e) {
-            plugin.getLogger().severe("Failed to save backpack for player " + player.getName() + ": " + e.getMessage());
-        }
+        writeInventory(owner, snapshot(inv), "player " + player.getName());
     }
 
     public void saveAllBackpacks() {
         for (UUID uuid : new HashSet<>(backpacks.keySet())) {
-            File file = new File(dataFolder, uuid + ".yml");
-            YamlConfiguration config = new YamlConfiguration();
             Inventory inv = backpacks.get(uuid);
-            for (int i = 0; i < backpackSize; i++) {
-                config.set("slot" + i, inv.getItem(i));
-            }
-            try {
-                config.save(file);
-            } catch (IOException e) {
-                plugin.getLogger().severe("Failed to save backpack for UUID " + uuid + ": " + e.getMessage());
-            }
+            if (inv != null) writeInventory(uuid, snapshot(inv), "shutdown");
         }
     }
 
@@ -423,16 +408,34 @@ public class BackpackManager implements Listener {
             @Override
             public void run() {
                 try {
-                    File file = new File(dataFolder, owner + ".yml");
-                    YamlConfiguration cfg = new YamlConfiguration();
-                    for (int i = 0; i < contents.length; i++) cfg.set("slot" + i, contents[i]);
-                    cfg.save(file);
-                } catch (IOException e) {
-                    plugin.getLogger().log(java.util.logging.Level.SEVERE,
-                            "Failed to save backpack " + owner + " from " + source, e);
+                    writeInventory(owner, contents, source);
+                } catch (RuntimeException e) {
+                    plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to save backpack " + owner + " from " + source, e);
                 }
             }
         }.runTaskAsynchronously(plugin);
+    }
+
+    private void writeInventory(UUID owner, ItemStack[] contents, String source) {
+        Object lock = saveLocks.computeIfAbsent(owner, ignored -> new Object());
+        synchronized (lock) {
+            File file = new File(dataFolder, owner + ".yml");
+            File temporaryFile = new File(dataFolder, owner + ".yml.tmp");
+            try {
+                YamlConfiguration config = new YamlConfiguration();
+                for (int i = 0; i < contents.length; i++) config.set("slot" + i, contents[i]);
+                config.save(temporaryFile);
+                try {
+                    Files.move(temporaryFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                    Files.move(temporaryFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (IOException e) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                        "Failed to save backpack " + owner + " from " + source, e);
+            }
+        }
     }
 
     /**
