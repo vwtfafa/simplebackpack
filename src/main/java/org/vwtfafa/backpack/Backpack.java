@@ -44,6 +44,7 @@ public class Backpack extends JavaPlugin {
         saveDefaultConfig();
         loadConfigOptions();
         new Metrics(this, 32528);
+        getLogger().info("bStats metrics enabled (ID: 32528)");
         backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teams, teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
         // register commands and admin UI
         registerCommands();
