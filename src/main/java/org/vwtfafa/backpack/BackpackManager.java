@@ -87,8 +87,7 @@ public class BackpackManager implements Listener {
             UUID owner = session.getOwner();
             return backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         }
-        if (teamEnabled && teams.containsKey(uuid) && !teams.get(uuid).isEmpty()) {
-            // Shared team backpack: find the actual team owner (first member or stored owner)
+        if (teamEnabled && getTeamOwner(uuid) != null && !getTeamOwner(uuid).equals(uuid)) {
             UUID teamOwner = getTeamOwner(uuid);
             Inventory teamInv = backpacks.computeIfAbsent(teamOwner, u -> loadBackpack(teamOwner));
             return teamInv;
@@ -149,8 +148,9 @@ public class BackpackManager implements Listener {
             return session.getOwner();
         }
         // Check team ownership
-        if (teamEnabled && teams.containsKey(playerId) && !teams.get(playerId).isEmpty()) {
-            return getTeamOwner(playerId);
+        if (teamEnabled) {
+            UUID teamOwner = getTeamOwner(playerId);
+            if (!teamOwner.equals(playerId)) return teamOwner;
         }
         return playerId;
     }
