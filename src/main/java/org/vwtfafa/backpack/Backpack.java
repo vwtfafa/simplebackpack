@@ -4,6 +4,10 @@ import org.bstats.bukkit.Metrics;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
@@ -14,7 +18,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.bukkit.OfflinePlayer;
 
-public class Backpack extends JavaPlugin {
+public class Backpack extends JavaPlugin implements Listener {
     private BackpackManager backpackManager;
     private AdminGUI adminGui;
     private Map<UUID, Set<UUID>> teams = new HashMap<>();
@@ -29,6 +33,11 @@ public class Backpack extends JavaPlugin {
     private boolean liveConfigReload = true;
     private boolean keepContentsOnDeath = true;
     private boolean backpacksEnabled = true;
+    private boolean allowInCreative = false;
+    private boolean autoSaveOnQuit = true;
+    private boolean guiConfigurable = true;
+    private boolean sharingEnabled = true;
+    private int teamMaxSize = 5;
 
     private final Set<String> registeredDynamicCommands = new HashSet<>();
 
@@ -46,6 +55,7 @@ public class Backpack extends JavaPlugin {
         new Metrics(this, 32528);
         getLogger().info("bStats metrics enabled (ID: 32528)");
         backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teams, teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
+        getServer().getPluginManager().registerEvents(this, this);
         // register commands and admin UI
         registerCommands();
         if (adminEnabled) adminGui = new AdminGUI(backpackManager);
@@ -75,6 +85,11 @@ public class Backpack extends JavaPlugin {
         keepContentsOnDeath = config.getBoolean("backpack.keep-on-death", true);
         messagesEnabled = config.getBoolean("messages-enabled", true);
         backpacksEnabled = config.getBoolean("backpacks-enabled", true);
+        allowInCreative = config.getBoolean("backpack.allow-in-creative", false);
+        autoSaveOnQuit = config.getBoolean("backpack.auto-save-on-quit", true);
+        guiConfigurable = config.getBoolean("backpack.gui-configurable", true);
+        sharingEnabled = config.getBoolean("enable-sharing", true);
+        teamMaxSize = Math.max(2, config.getInt("team.max-size", 5));
     }
 
     private String getBackpackName() {
@@ -89,6 +104,10 @@ public class Backpack extends JavaPlugin {
         PluginCommand backpackCmd = getCommand("backpack");
         if (backpackCmd != null) {
             backpackCmd.setExecutor((sender, command, label, args) -> {
+                if (!sender.hasPermission("simplebackpack.use")) {
+                    sender.sendMessage(getMessage("no-permission"));
+                    return true;
+                }
                 if (!backpacksEnabled) {
                     sender.sendMessage(getMessage("backpacks-disabled"));
                     return true;
@@ -98,6 +117,10 @@ public class Backpack extends JavaPlugin {
                     return true;
                 }
                 Player player = (Player) sender;
+                if (!allowInCreative && player.getGameMode() == org.bukkit.GameMode.CREATIVE) {
+                    player.sendMessage(getMessage("creative-not-allowed"));
+                    return true;
+                }
                 if (messagesEnabled) player.sendMessage(getMessage("open-success"));
                 backpackManager.openBackpack(player);
                 return true;
@@ -107,6 +130,11 @@ public class Backpack extends JavaPlugin {
                 PluginCommand configCmd = getCommand("backpackconfig");
         if (configCmd != null) {
             configCmd.setExecutor((sender, command, label, args) -> {
+                if (!sender.hasPermission("simplebackpack.config")) {
+                    sender.sendMessage(getMessage("no-permission"));
+                    return true;
+                }
+                if (!guiConfigurable) return true;
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(getMessage("no-permission"));
                     return true;
@@ -120,9 +148,14 @@ public class Backpack extends JavaPlugin {
         PluginCommand reloadCmd = getCommand("backpackreload");
         if (reloadCmd != null) {
             reloadCmd.setExecutor((sender, command, label, args) -> {
+                if (!sender.hasPermission("simplebackpack.reload")) {
+                    sender.sendMessage(getMessage("no-permission"));
+                    return true;
+                }
                 reloadConfig();
                 loadConfigOptions();
                 backpackManager.setConfig(getBackpackName(), getBackpackSize(), teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
+                teamMaxSize = Math.max(2, getConfig().getInt("team.max-size", 5));
                 registerCommands();
                 if (messagesEnabled) sender.sendMessage(getMessage("reload-success"));
                 return true;
@@ -133,6 +166,10 @@ public class Backpack extends JavaPlugin {
             PluginCommand inviteCmd = getCommand("invite");
             if (inviteCmd != null) {
                 inviteCmd.setExecutor((sender, command, label, args) -> {
+                    if (!sender.hasPermission("simplebackpack.team.invite")) {
+                        sender.sendMessage(getMessage("no-permission"));
+                        return true;
+                    }
                     if (!(sender instanceof Player)) {
                         sender.sendMessage(getMessage("no-permission"));
                         return true;
@@ -152,6 +189,10 @@ public class Backpack extends JavaPlugin {
                         player.sendMessage(getMessage("already-in-team"));
                         return true;
                     }
+                    if (teams.containsKey(player.getUniqueId()) && teams.get(player.getUniqueId()).size() >= teamMaxSize) {
+                        player.sendMessage(getMessage("team-full"));
+                        return true;
+                    }
                     // Check if target already in a team
                     if (teams.containsKey(target.getUniqueId()) && !teams.get(target.getUniqueId()).isEmpty()) {
                         player.sendMessage(getMessage("target-in-team"));
@@ -169,6 +210,10 @@ public class Backpack extends JavaPlugin {
             PluginCommand teamCmd = getCommand("team");
             if (teamCmd != null) {
                 teamCmd.setExecutor((sender, command, label, args) -> {
+                    if (!sender.hasPermission("simplebackpack.team")) {
+                        sender.sendMessage(getMessage("no-permission"));
+                        return true;
+                    }
                     if (!(sender instanceof Player)) {
                         sender.sendMessage(getMessage("no-permission"));
                         return true;
@@ -207,6 +252,10 @@ public class Backpack extends JavaPlugin {
             PluginCommand leaveCmd = getCommand("leave");
             if (leaveCmd != null) {
                 leaveCmd.setExecutor((sender, command, label, args) -> {
+                    if (!sender.hasPermission("simplebackpack.team.leave")) {
+                        sender.sendMessage(getMessage("no-permission"));
+                        return true;
+                    }
                     if (!(sender instanceof Player)) {
                         sender.sendMessage(getMessage("no-permission"));
                         return true;
@@ -245,6 +294,10 @@ public class Backpack extends JavaPlugin {
             PluginCommand adminCmd = getCommand("backpackadmin");
             if (adminCmd != null) {
                 adminCmd.setExecutor((sender, command, label, args) -> {
+                        if (!sender.hasPermission("simplebackpack.admin")) {
+                            sender.sendMessage(getMessage("no-permission"));
+                            return true;
+                        }
                     if (!(sender instanceof Player)) {
                         sender.sendMessage(getMessage("no-permission"));
                         return true;
@@ -271,6 +324,10 @@ public class Backpack extends JavaPlugin {
         PluginCommand shareCmd = getCommand("backpackshare");
         if (shareCmd != null) {
             shareCmd.setExecutor((sender, command, label, args) -> {
+                if (!sharingEnabled || !sender.hasPermission("simplebackpack.use")) {
+                    sender.sendMessage(getMessage("no-permission"));
+                    return true;
+                }
                 if (!(sender instanceof Player)) {
                     sender.sendMessage(getMessage("no-permission"));
                     return true;
@@ -287,7 +344,14 @@ public class Backpack extends JavaPlugin {
                 }
                 long duration = 60L * 60L * 1000L; // default 1 hour
                 if (args.length >= 2) {
-                    try { duration = Long.parseLong(args[1]) * 60L * 1000L; } catch (NumberFormatException ignored) {}
+                    try {
+                        long minutes = Long.parseLong(args[1]);
+                        if (minutes <= 0 || minutes > 7 * 24 * 60) throw new NumberFormatException();
+                        duration = minutes * 60L * 1000L;
+                    } catch (NumberFormatException ignored) {
+                        player.sendMessage(getMessage("share-usage"));
+                        return true;
+                    }
                 }
                 backpackManager.shareBackpack(player.getUniqueId(), target.getUniqueId(), duration);
                 player.sendMessage(getMessage("share-success").replace("{player}", target.getName()));
@@ -346,5 +410,19 @@ public class Backpack extends JavaPlugin {
             sb.setLength(sb.length() - 2); // remove last comma and space
         }
         player.sendMessage(getMessage("team-members").replace("{members}", sb.toString()));
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        if (autoSaveOnQuit && backpackManager != null) {
+            backpackManager.saveBackpack(event.getPlayer());
+        }
+    }
+
+    @EventHandler
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        if (!keepContentsOnDeath && backpackManager != null) {
+            backpackManager.clearBackpack(event.getEntity());
+        }
     }
 }
