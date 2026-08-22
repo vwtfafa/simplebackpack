@@ -1,36 +1,38 @@
 package org.vwtfafa.backpack;
 
+import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bstats.bukkit.Metrics;
-import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.entity.Player;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.configuration.file.YamlConfiguration;
-
-import java.io.File;
-import java.io.IOException;
 
 public class Backpack extends JavaPlugin implements Listener {
-    private static final long INVITE_EXPIRY_MILLIS = 5L * 60L * 1000L;
+    static final long INVITE_EXPIRY_MILLIS = 5L * 60L * 1000L;
+    private static final int BSTATS_PLUGIN_ID = 32528;
 
-    private BackpackManager backpackManager;
+    private BackpackManager manager;
     private AdminGUI adminGui;
     private Messages messages;
     private final TeamRegistry teamRegistry = new TeamRegistry();
-    private Map<UUID, TeamInvite> pendingInvites = new HashMap<>();
+    private final Map<UUID, TeamInvite> pendingInvites = new HashMap<>();
+    private File teamsFile;
+
+    // Configuration-driven state
     private Locale locale = Locale.ENGLISH;
     private boolean classicMode = false;
     private boolean teamEnabled = true;
@@ -40,22 +42,17 @@ public class Backpack extends JavaPlugin implements Listener {
     private boolean showAdminCommands = true;
     private boolean liveConfigReload = true;
     private boolean keepContentsOnDeath = true;
+    private boolean autoSaveOnQuit = true;
     private boolean backpacksEnabled = true;
     private boolean allowInCreative = false;
-    private boolean autoSaveOnQuit = true;
     private boolean guiConfigurable = true;
     private boolean sharingEnabled = true;
     private int teamMaxSize = 5;
 
-    private final Set<String> registeredDynamicCommands = new HashSet<>();
-    private File teamsFile;
-
-
     @Override
     public void onDisable() {
-        if (backpackManager != null) backpackManager.saveAllBackpacks();
+        if (manager != null) manager.saveAllBackpacks();
         saveTeams();
-        unregisterDynamicCommands();
     }
 
     @Override
@@ -65,25 +62,40 @@ public class Backpack extends JavaPlugin implements Listener {
         teamsFile = new File(getDataFolder(), "teams.yml");
         loadTeams();
         loadConfigOptions();
-        new Metrics(this, 32528);
-        getLogger().info("bStats metrics enabled (ID: 32528)");
-        backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teamRegistry, teamEnabled, locale);
+        new Metrics(this, BSTATS_PLUGIN_ID);
+        getLogger().info("bStats metrics enabled (ID: " + BSTATS_PLUGIN_ID + ")");
+        manager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teamRegistry, teamEnabled, locale);
         getServer().getPluginManager().registerEvents(this, this);
-        // register commands and admin UI
-        // register commands and admin UI
         registerCommands();
-        if (adminEnabled && adminGuiEnabled) adminGui = new AdminGUI(backpackManager);
+        if (adminEnabled && adminGuiEnabled) adminGui = new AdminGUI(manager);
         // Initialize update checker
         new UpdateChecker(this).checkForUpdates();
     }
 
-    private void unregisterDynamicCommands() {
-        for (String cmd : registeredDynamicCommands) {
-            try {
-                getCommand(cmd).setExecutor(null);
-            } catch (Exception ignored) {}
-        }
-        registeredDynamicCommands.clear();
+    /**
+     * Registers all commands through Paper's Brigadier lifecycle API.
+     */
+    private void registerCommands() {
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
+            Commands registrar = event.registrar();
+            registrar.register("backpack", "Opens your personal backpack", List.of("bp"), new BackpackCommand(this));
+            registrar.register("backpackconfig", "Open the backpack configuration GUI", List.of(),
+                    new BackpackConfigCommand(this));
+            registrar.register("backpackreload", "Reloads the SimpleBackpack config", List.of(),
+                    new BackpackReloadCommand(this));
+            if (teamEnabled && showTeamCommands && !classicMode) {
+                registrar.register("invite", "Invite a player to your team", List.of(), new InviteCommand(this));
+                registrar.register("team", "Show your team members or accept an invite", List.of(),
+                        new TeamCommand(this));
+                registrar.register("leave", "Leave your current team", List.of(), new LeaveCommand(this));
+            }
+            if (adminEnabled && showAdminCommands) {
+                registrar.register("backpackadmin", "Admin commands for SimpleBackpack", List.of(),
+                        new BackpackAdminCommand(this));
+            }
+            registrar.register("backpackshare", "Temporarily share your backpack", List.of(),
+                    new BackpackShareCommand(this));
+        });
     }
 
     private void loadConfigOptions() {
@@ -98,9 +110,9 @@ public class Backpack extends JavaPlugin implements Listener {
         showAdminCommands = config.getBoolean("show-admin-commands", true);
         liveConfigReload = config.getBoolean("live-config-reload", true);
         keepContentsOnDeath = config.getBoolean("backpack.keep-on-death", true);
+        autoSaveOnQuit = config.getBoolean("backpack.auto-save-on-quit", true);
         backpacksEnabled = config.getBoolean("backpacks-enabled", true);
         allowInCreative = config.getBoolean("backpack.allow-in-creative", false);
-        autoSaveOnQuit = config.getBoolean("backpack.auto-save-on-quit", true);
         guiConfigurable = config.getBoolean("backpack.gui-configurable", true);
         sharingEnabled = config.getBoolean("enable-sharing", true);
         teamMaxSize = Math.max(2, config.getInt("team.max-size", 5));
@@ -109,321 +121,80 @@ public class Backpack extends JavaPlugin implements Listener {
     private String getBackpackName() {
         return getConfig().getString("backpack.name", "§bSimple Backpack");
     }
+
     private int getBackpackSize() {
         return getConfig().getInt("backpack.size", 27);
     }
 
-    private void registerCommands() {
-        unregisterDynamicCommands();
-        PluginCommand backpackCmd = getCommand("backpack");
-        if (backpackCmd != null) {
-            backpackCmd.setExecutor((sender, command, label, args) -> {
-                if (!sender.hasPermission("simplebackpack.use")) {
-                    messages.send(sender, "no-permission");
-                    return true;
-                }
-                if (!backpacksEnabled) {
-                    messages.send(sender, "backpacks-disabled");
-                    return true;
-                }
-                if (!(sender instanceof Player)) {
-                    messages.send(sender, "no-permission");
-                    return true;
-                }
-                Player player = (Player) sender;
-                if (!allowInCreative && player.getGameMode() == org.bukkit.GameMode.CREATIVE) {
-                    messages.send(player, "creative-not-allowed");
-                    return true;
-                }
-                messages.send(player, "open-success");
-                backpackManager.openBackpack(player);
-                return true;
-            });
-            registeredDynamicCommands.add("backpack");
-        }
-                PluginCommand configCmd = getCommand("backpackconfig");
-        if (configCmd != null) {
-            configCmd.setExecutor((sender, command, label, args) -> {
-                if (!sender.hasPermission("simplebackpack.config")) {
-                    messages.send(sender, "no-permission");
-                    return true;
-                }
-                if (!guiConfigurable) return true;
-                if (!(sender instanceof Player)) {
-                    messages.send(sender, "no-permission");
-                    return true;
-                }
-                Player player = (Player) sender;
-                backpackManager.openConfigGUI(player);
-                return true;
-            });
-            registeredDynamicCommands.add("backpackconfig");
-        }
-        PluginCommand reloadCmd = getCommand("backpackreload");
-        if (reloadCmd != null) {
-            reloadCmd.setExecutor((sender, command, label, args) -> {
-                if (!sender.hasPermission("simplebackpack.reload")) {
-                    messages.send(sender, "no-permission");
-                    return true;
-                }
-                reloadConfig();
-                messages.reload();
-                loadConfigOptions();
-                backpackManager.setConfig(getBackpackName(), getBackpackSize(), teamEnabled, locale);
-                teamMaxSize = Math.max(2, getConfig().getInt("team.max-size", 5));
-                registerCommands();
-                messages.send(sender, "reload-success");
-                return true;
-            });
-            registeredDynamicCommands.add("backpackreload");
-        }
-        if (teamEnabled && showTeamCommands && !classicMode) {
-            PluginCommand inviteCmd = getCommand("invite");
-            if (inviteCmd != null) {
-                inviteCmd.setExecutor((sender, command, label, args) -> {
-                    if (!sender.hasPermission("simplebackpack.team.invite")) {
-                        messages.send(sender, "no-permission");
-                        return true;
-                    }
-                    if (!(sender instanceof Player)) {
-                        messages.send(sender, "no-permission");
-                        return true;
-                    }
-                    Player player = (Player) sender;
-                    if (args.length < 1) {
-                        messages.send(player, "invite-usage");
-                        return true;
-                    }
-                    Player target = getServer().getPlayer(args[0]);
-                    if (target == null) {
-                        messages.send(player, "share-player-offline");
-                        return true;
-                    }
-                    // Check if already in a team
-                    UUID owner = teamRegistry.findOwner(player.getUniqueId());
-                    if (owner != null && teamRegistry.membersOf(owner).size() >= teamMaxSize) {
-                        messages.send(player, "team-full");
-                        return true;
-                    }
-                    // Check if target already in a team
-                    if (teamRegistry.findOwner(target.getUniqueId()) != null) {
-                        messages.send(player, "target-in-team");
-                        return true;
-                    }
-                    pendingInvites.values().removeIf(TeamInvite::isExpired);
-                    pendingInvites.put(target.getUniqueId(),
-                            new TeamInvite(player.getUniqueId(), System.currentTimeMillis() + INVITE_EXPIRY_MILLIS));
-                    String targetName = target.getName() != null ? target.getName() : target.getUniqueId().toString();
-                    String playerName = player.getName() != null ? player.getName() : player.getUniqueId().toString();
-                    messages.send(player, "team-invite", "{player}", targetName);
-                    messages.send(target, "team-invite-recv", "{player}", playerName);
-                    return true;
-                });
-                registeredDynamicCommands.add("invite");
-            }
-            PluginCommand teamCmd = getCommand("team");
-            if (teamCmd != null) {
-                teamCmd.setExecutor((sender, command, label, args) -> {
-                    if (!sender.hasPermission("simplebackpack.team")) {
-                        messages.send(sender, "no-permission");
-                        return true;
-                    }
-                    if (!(sender instanceof Player)) {
-                        messages.send(sender, "no-permission");
-                        return true;
-                    }
-                    Player player = (Player) sender;
-                    // Check if team accept is requested
-                    if (args.length > 0 && args[0].equalsIgnoreCase("accept")) {
-                        UUID targetId = player.getUniqueId();
-                        TeamInvite invite = pendingInvites.remove(targetId);
-                        if (invite != null && !invite.isExpired()) {
-                            UUID inviterId = invite.inviter();
-                            UUID owner = teamRegistry.findOwner(inviterId);
-                            if (owner == null) {
-                                Set<UUID> members = new HashSet<>();
-                                members.add(inviterId);
-                                teamRegistry.createTeam(inviterId, members);
-                            } else {
-                                teamRegistry.addMember(owner, targetId);
-                            }
-                            saveTeams();
-                            OfflinePlayer inviterOffline = getServer().getOfflinePlayer(inviterId);
-                            String inviterName = (inviterOffline != null && inviterOffline.getName() != null) ? inviterOffline.getName() : inviterId.toString();
-                            messages.send(player, "team-joined", "{player}", inviterName);
-                            // Notify inviter if online
-                            Player inviter = getServer().getPlayer(inviterId);
-                            if (inviter != null) {
-                                messages.send(inviter, "team-joined", "{player}", player.getName());
-                            }
-                        } else {
-                            if (invite != null) {
-                                messages.send(player, "team-invite-expired");
-                            }
-                            // Show team members or not in team
-                            showTeamInfo(player);
-                        }
-                        return true;
-                    }
-                    // Default: show team info
-                    showTeamInfo(player);
-                    return true;
-                });
-                registeredDynamicCommands.add("team");
-            }
-            PluginCommand leaveCmd = getCommand("leave");
-            if (leaveCmd != null) {
-                leaveCmd.setExecutor((sender, command, label, args) -> {
-                    if (!sender.hasPermission("simplebackpack.team.leave")) {
-                        messages.send(sender, "no-permission");
-                        return true;
-                    }
-                    if (!(sender instanceof Player)) {
-                        messages.send(sender, "no-permission");
-                        return true;
-                    }
-                    Player player = (Player) sender;
-                    UUID uuid = player.getUniqueId();
-                    // removeMember handles empty teams and deterministic
-                    // owner succession internally
-                    if (teamRegistry.removeMember(uuid)) {
-                        saveTeams();
-                        messages.send(player, "team-leave");
-                    } else {
-                        messages.send(player, "not-in-team");
-                    }
-                    return true;
-                });
-                registeredDynamicCommands.add("leave");
-            }
-        }
-        if (adminEnabled && showAdminCommands) {
-            PluginCommand adminCmd = getCommand("backpackadmin");
-            if (adminCmd != null) {
-                adminCmd.setExecutor((sender, command, label, args) -> {
-                        if (!sender.hasPermission("simplebackpack.admin")) {
-                            messages.send(sender, "no-permission");
-                            return true;
-                        }
-                    if (!(sender instanceof Player)) {
-                        messages.send(sender, "no-permission");
-                        return true;
-                    }
-                    Player player = (Player) sender;
-                    if (args.length > 0 && args[0].equalsIgnoreCase("gui")) {
-                        if (!player.hasPermission("simplebackpack.admin")) {
-                            messages.send(player, "no-permission");
-                            return true;
-                        }
-                        if (adminGui == null) {
-                            messages.send(player, "admin-gui-disabled");
-                            return true;
-                        }
-                        // open admin GUI
-                        backpackManager.getPlugin().getServer().getScheduler().runTask(backpackManager.getPlugin(), () -> {
-                            if (adminGui != null) adminGui.openAdminGUI(player);
-                        });
-                        return true;
-                    }
-                    messages.send(player, "admin-enabled");
-                    return true;
-                });
-                registeredDynamicCommands.add("backpackadmin");
-            }
-        }
+    /**
+     * Reloads the configuration, localized messages and manager settings.
+     */
+    void reloadConfiguration() {
+        reloadConfig();
+        messages.reload();
+        loadConfigOptions();
+        manager.setConfig(getBackpackName(), getBackpackSize(), teamEnabled, locale);
+    }
 
-        PluginCommand shareCmd = getCommand("backpackshare");
-        if (shareCmd != null) {
-            shareCmd.setExecutor((sender, command, label, args) -> {
-                if (!sharingEnabled || !sender.hasPermission("simplebackpack.use")) {
-                    messages.send(sender, "no-permission");
-                    return true;
-                }
-                if (!(sender instanceof Player)) {
-                    messages.send(sender, "no-permission");
-                    return true;
-                }
-                Player player = (Player) sender;
-                if (args.length < 1) {
-                    messages.send(player, "share-usage");
-                    return true;
-                }
-                Player target = getServer().getPlayer(args[0]);
-                if (target == null) {
-                    messages.send(player, "share-player-offline");
-                    return true;
-                }
-                long duration = 60L * 60L * 1000L; // default 1 hour
-                if (args.length >= 2) {
-                    try {
-                        long minutes = Long.parseLong(args[1]);
-                        if (minutes <= 0 || minutes > 7 * 24 * 60) throw new NumberFormatException();
-                        duration = minutes * 60L * 1000L;
-                    } catch (NumberFormatException ignored) {
-                        messages.send(player, "share-usage");
-                        return true;
-                    }
-                }
-                backpackManager.shareBackpack(player.getUniqueId(), target.getUniqueId(), duration);
-                messages.send(player, "share-success", "{player}", target.getName());
-                messages.send(target, "share-received", "{player}", player.getName());
-                return true;
-            });
-            registeredDynamicCommands.add("backpackshare");
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        if (autoSaveOnQuit && manager != null) {
+            manager.saveBackpackAsync(event.getPlayer());
         }
     }
 
-    private void showTeamInfo(Player player) {
-        UUID uuid = player.getUniqueId();
-        UUID teamOwner = teamRegistry.findOwner(uuid);
-        Set<UUID> teamMembers = teamOwner == null ? null : teamRegistry.membersOf(teamOwner);
-        if (teamMembers == null || teamMembers.isEmpty()) {
-            // Check if there's a pending invite
-            TeamInvite invite = pendingInvites.get(uuid);
-            if (invite != null && !invite.isExpired()) {
-                OfflinePlayer inviterOffline = getServer().getOfflinePlayer(invite.inviter());
-                String inviterName = inviterOffline.getName() != null ? inviterOffline.getName() : invite.inviter().toString();
-                messages.send(player, "team-pending", "{player}", inviterName);
-            } else {
-                messages.send(player, "not-in-team");
-            }
-            return;
-        }
-        // Build message
-        StringBuilder sb = new StringBuilder();
-        for (UUID member : teamMembers) {
-            Player memberPlayer = getServer().getPlayer(member);
-            String name = memberPlayer != null ? memberPlayer.getName() : member.toString();
-            if (member.equals(teamOwner)) {
-                name += " (L)";
-            }
-            sb.append(name).append(", ");
-        }
-        if (sb.length() > 0) {
-            sb.setLength(sb.length() - 2); // remove last comma and space
-        }
-        messages.send(player, "team-members", "{members}", sb.toString());
-    }
-
-    private void loadTeams() {
-        teamRegistry.clear();
-        if (teamsFile == null || !teamsFile.exists()) return;
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(teamsFile);
-        for (String ownerKey : config.getStringList("teams.owners")) {
-            try {
-                UUID owner = UUID.fromString(ownerKey);
-                Set<UUID> members = new HashSet<>();
-                for (String memberKey : config.getStringList("teams." + ownerKey)) {
-                    members.add(UUID.fromString(memberKey));
-                }
-                teamRegistry.createTeam(owner, members);
-            } catch (IllegalArgumentException ignored) {
-                getLogger().warning("Ignoring invalid team entry: " + ownerKey);
-            }
+    @EventHandler
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        if (!keepContentsOnDeath && manager != null) {
+            manager.clearBackpack(event.getEntity());
         }
     }
 
-    private void saveTeams() {
+    Messages messages() {
+        return messages;
+    }
+
+    BackpackManager manager() {
+        return manager;
+    }
+
+    AdminGUI adminGui() {
+        return adminGui;
+    }
+
+    TeamRegistry teamRegistry() {
+        return teamRegistry;
+    }
+
+    Map<UUID, TeamInvite> pendingInvites() {
+        return pendingInvites;
+    }
+
+    int teamMaxSize() {
+        return teamMaxSize;
+    }
+
+    boolean backpacksEnabled() {
+        return backpacksEnabled;
+    }
+
+    boolean allowInCreative() {
+        return allowInCreative;
+    }
+
+    boolean guiConfigurable() {
+        return guiConfigurable;
+    }
+
+    boolean sharingEnabled() {
+        return sharingEnabled;
+    }
+
+    boolean liveConfigReload() {
+        return liveConfigReload;
+    }
+
+    void saveTeams() {
         if (teamsFile == null) return;
         YamlConfiguration config = new YamlConfiguration();
         List<String> owners = new java.util.ArrayList<>();
@@ -441,17 +212,21 @@ public class Backpack extends JavaPlugin implements Listener {
         }
     }
 
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        if (autoSaveOnQuit && backpackManager != null) {
-            backpackManager.saveBackpackAsync(event.getPlayer());
-        }
-    }
-
-    @EventHandler
-    public void onPlayerDeath(PlayerDeathEvent event) {
-        if (!keepContentsOnDeath && backpackManager != null) {
-            backpackManager.clearBackpack(event.getEntity());
+    private void loadTeams() {
+        teamRegistry.clear();
+        if (teamsFile == null || !teamsFile.exists()) return;
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(teamsFile);
+        for (String ownerKey : config.getStringList("teams.owners")) {
+            try {
+                UUID owner = UUID.fromString(ownerKey);
+                Set<UUID> members = new HashSet<>();
+                for (String memberKey : config.getStringList("teams." + ownerKey)) {
+                    members.add(UUID.fromString(memberKey));
+                }
+                teamRegistry.createTeam(owner, members);
+            } catch (IllegalArgumentException ignored) {
+                getLogger().warning("Ignoring invalid team entry: " + ownerKey);
+            }
         }
     }
 }

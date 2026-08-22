@@ -2,40 +2,6 @@ name: SimpleBackpack
 main: org.vwtfafa.backpack.Backpack
 version: '${version}'
 api-version: 26.2
-commands:
-  backpack:
-    description: Opens your personal backpack (configurable size, persistent)
-    usage: /backpack
-    aliases: [bp]
-    permission: simplebackpack.use
-  backpackconfig:
-    description: Open the backpack configuration GUI
-    usage: /backpackconfig
-    permission: simplebackpack.config
-  backpackreload:
-    description: Reloads the SimpleBackpack config
-    usage: /backpackreload
-    permission: simplebackpack.reload
-  invite:
-    description: Invite a player to your team to share your backpack
-    usage: /invite <player>
-    permission: simplebackpack.team.invite
-  team:
-    description: Show your team members
-    usage: /team
-    permission: simplebackpack.team
-  leave:
-    description: Leave your current team
-    usage: /leave
-    permission: simplebackpack.team.leave
-  backpackadmin:
-    description: Admin commands for SimpleBackpack
-    usage: /backpackadmin <args>
-    permission: simplebackpack.admin
-  backpackshare:
-    description: Temporarily share your backpack with another player
-    usage: /backpackshare <player> [durationMinutes]
-    permission: simplebackpack.use
 permissions:
   simplebackpack.use:
     description: Allows using /backpack and /bp
