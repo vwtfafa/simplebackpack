@@ -444,7 +444,7 @@ public class Backpack extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         if (autoSaveOnQuit && backpackManager != null) {
-            backpackManager.saveBackpack(event.getPlayer());
+            backpackManager.saveBackpackAsync(event.getPlayer());
         }
     }
 

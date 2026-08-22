@@ -54,7 +54,9 @@ public class BackpackManager implements Listener {
     private FileConfiguration configCache;
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
     private final File auditLogFile;
-    private final Map<UUID, Object> saveLocks = new ConcurrentHashMap<>();
+    // Guards all inventory file writes: prevents interleaved temp-file writes
+    // without keeping an ever-growing per-owner lock map
+    private final Object saveIoLock = new Object();
 
     public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled, boolean classicMode, boolean adminEnabled, boolean liveConfigReload, boolean showTeamCommands, boolean showAdminCommands, boolean keepContentsOnDeath, Locale locale) {
         this.plugin = plugin;
@@ -215,6 +217,17 @@ public class BackpackManager implements Listener {
         UUID owner = resolveEffectiveOwner(player.getUniqueId());
         Inventory inv = getBackpack(player);
         writeInventory(owner, snapshot(inv), "player " + player.getName());
+    }
+
+    /**
+     * Saves a player's backpack without blocking the caller: the contents
+     * are snapshotted synchronously and written on an async task. Used for
+     * quit-time autosave so disconnects never cause main-thread disk I/O.
+     */
+    public void saveBackpackAsync(Player player) {
+        UUID owner = resolveEffectiveOwner(player.getUniqueId());
+        Inventory inv = getBackpack(player);
+        saveInventoryAsync(owner, snapshot(inv), "quit");
     }
 
     public void saveAllBackpacks() {
@@ -497,8 +510,7 @@ public class BackpackManager implements Listener {
     }
 
     private void writeInventory(UUID owner, ItemStack[] contents, String source) {
-        Object lock = saveLocks.computeIfAbsent(owner, ignored -> new Object());
-        synchronized (lock) {
+        synchronized (saveIoLock) {
             File file = new File(dataFolder, owner + ".yml");
             File temporaryFile = new File(dataFolder, owner + ".yml.tmp");
             try {
