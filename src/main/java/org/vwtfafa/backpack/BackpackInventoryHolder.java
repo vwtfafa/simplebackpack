@@ -12,6 +12,7 @@ final class BackpackInventoryHolder implements InventoryHolder {
     private final UUID owner;
     private final boolean preview;
     private final int page;
+    private Inventory inventory;
 
     private BackpackInventoryHolder(Type type, UUID owner, boolean preview, int page) {
         this.type = type;
@@ -52,8 +53,16 @@ final class BackpackInventoryHolder implements InventoryHolder {
         return page;
     }
 
+    /**
+     * Called right after the inventory was created with this holder so the
+     * holder can honor its contract instead of returning null.
+     */
+    void setInventory(Inventory inventory) {
+        this.inventory = inventory;
+    }
+
     @Override
     public Inventory getInventory() {
-        return null;
+        return inventory;
     }
 }

@@ -43,8 +43,10 @@ public class AdminGUI implements Listener {
         int maxPage = Math.max(0, (known.size() - 1) / PAGE_SIZE);
         int current = Math.min(Math.max(0, page), maxPage);
 
-        Inventory gui = Bukkit.createInventory(BackpackInventoryHolder.adminList(current), 54,
+        BackpackInventoryHolder holder = BackpackInventoryHolder.adminList(current);
+        Inventory gui = Bukkit.createInventory(holder, 54,
                 Component.text("SimpleBackpack Admin"));
+        holder.setInventory(gui);
         for (int i = current * PAGE_SIZE; i < Math.min(known.size(), (current + 1) * PAGE_SIZE); i++) {
             gui.addItem(createEntryItem(known.get(i)));
         }

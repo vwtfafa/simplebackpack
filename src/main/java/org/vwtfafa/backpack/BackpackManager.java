@@ -122,7 +122,9 @@ public class BackpackManager implements Listener {
         // Resolve the effective owner to maintain team/share integrity
         UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
         Inventory oldInv = backpacks.get(effectiveOwner);
-        Inventory newInv = Bukkit.createInventory(BackpackInventoryHolder.backpack(effectiveOwner), backpackSize, backpackName);
+        BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(effectiveOwner);
+        Inventory newInv = Bukkit.createInventory(holder, backpackSize, backpackName);
+        holder.setInventory(newInv);
         if (oldInv != null) {
             int keptSlots = Math.min(oldInv.getSize(), newInv.getSize());
             for (int i = 0; i < keptSlots; i++) {
@@ -191,7 +193,9 @@ public class BackpackManager implements Listener {
 
     private Inventory loadBackpack(UUID uuid) {
         File file = new File(dataFolder, uuid + ".yml");
-        Inventory inv = Bukkit.createInventory(BackpackInventoryHolder.backpack(uuid), backpackSize, backpackName);
+        BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(uuid);
+        Inventory inv = Bukkit.createInventory(holder, backpackSize, backpackName);
+        holder.setInventory(inv);
         if (file.exists()) {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
             for (int i = 0; i < backpackSize; i++) {
@@ -282,7 +286,9 @@ public class BackpackManager implements Listener {
     public void openForAdmin(UUID owner, Player admin, boolean preview) {
         Inventory inv = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         // open a new inventory view for admin with same contents
-        Inventory view = Bukkit.createInventory(BackpackInventoryHolder.admin(owner, preview), inv.getSize(), "Backpack: " + owner.toString());
+        BackpackInventoryHolder holder = BackpackInventoryHolder.admin(owner, preview);
+        Inventory view = Bukkit.createInventory(holder, inv.getSize(), "Backpack: " + owner.toString());
+        holder.setInventory(view);
         for (int i = 0; i < inv.getSize(); i++) view.setItem(i, inv.getItem(i));
         admin.openInventory(view);
         logAudit("ADMIN_OPEN " + admin.getName() + " -> " + owner.toString() + " preview=" + preview);
@@ -320,7 +326,9 @@ public class BackpackManager implements Listener {
     }
 
     public void openConfigGUI(Player player) {
-        Inventory gui = Bukkit.createInventory(BackpackInventoryHolder.config(), 9, "Backpack Config");
+        BackpackInventoryHolder holder = BackpackInventoryHolder.config();
+        Inventory gui = Bukkit.createInventory(holder, 9, "Backpack Config");
+        holder.setInventory(gui);
         // Slot 0: Change Name
         ItemStack nameItem = new ItemStack(Material.NAME_TAG);
         gui.setItem(0, nameItem);
