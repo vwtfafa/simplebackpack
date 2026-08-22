@@ -35,6 +35,7 @@ import java.nio.file.StandardCopyOption;
 public class BackpackManager implements Listener {
     private static final int MIN_BACKPACK_SIZE = 9;
     private static final int MAX_BACKPACK_SIZE = 54;
+    private static final long AUDIT_LOG_MAX_BYTES = 5L * 1024L * 1024L;
 
     private JavaPlugin plugin;
     private final Messages messages;
@@ -239,11 +240,26 @@ public class BackpackManager implements Listener {
 
     // Audit logging
     private void logAudit(String line) {
-        try (FileWriter fw = new FileWriter(auditLogFile, true); PrintWriter pw = new PrintWriter(fw)) {
-            String ts = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now());
-            pw.println(ts + " - " + line);
-        } catch (IOException e) {
-            plugin.getLogger().severe("Failed to write to audit log: " + e.getMessage());
+        String timestamped = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now())
+                + " - " + line;
+        // File I/O must not block the main thread
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> writeAuditLine(timestamped));
+    }
+
+    private void writeAuditLine(String line) {
+        synchronized (this) {
+            try {
+                if (auditLogFile.length() > AUDIT_LOG_MAX_BYTES) {
+                    File rotated = new File(auditLogFile.getParentFile(), auditLogFile.getName() + ".old");
+                    Files.move(auditLogFile.toPath(), rotated.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    auditLogFile.createNewFile();
+                }
+                try (FileWriter fw = new FileWriter(auditLogFile, true); PrintWriter pw = new PrintWriter(fw)) {
+                    pw.println(line);
+                }
+            } catch (IOException e) {
+                plugin.getLogger().severe("Failed to write to audit log: " + e.getMessage());
+            }
         }
     }
 
