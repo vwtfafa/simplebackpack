@@ -31,6 +31,7 @@ import java.nio.file.StandardCopyOption;
 
 public class BackpackManager implements Listener {
     private JavaPlugin plugin;
+    private final Messages messages;
     private final Map<UUID, Inventory> backpacks = new ConcurrentHashMap<>();
     private Map<UUID, Set<UUID>> teams;
     private boolean teamEnabled;
@@ -51,6 +52,7 @@ public class BackpackManager implements Listener {
 
     public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, Map<UUID, Set<UUID>> teams, boolean teamEnabled, boolean classicMode, boolean adminEnabled, boolean liveConfigReload, boolean showTeamCommands, boolean showAdminCommands, boolean keepContentsOnDeath, Locale locale) {
         this.plugin = plugin;
+        this.messages = new Messages(plugin);
         this.backpackName = backpackName;
         this.teams = teams;
         this.teamEnabled = teamEnabled;
@@ -255,6 +257,7 @@ public class BackpackManager implements Listener {
         this.showAdminCommands = showAdminCommands;
         this.keepContentsOnDeath = keepContentsOnDeath;
         this.locale = locale;
+        this.messages.reload();
         this.configCache = plugin.getConfig();
     }
 
@@ -284,21 +287,21 @@ public class BackpackManager implements Listener {
                     this.backpackName = locale == Locale.GERMAN ? "§bRucksack" : "§bBackpack";
                     saveConfigValue("backpack.name", this.backpackName);
                     updateBackpackGUI(player);
-                    player.sendMessage(locale == Locale.GERMAN ? "§aRucksack-Name geändert." : "§aBackpack name changed.");
+                    messages.send(player, "config-changed-name");
                     break;
                 case 1:
                     // Farbe ändern (cycle: Aqua -> Green -> Red -> Aqua ...)
                     this.backpackName = cycleColor(this.backpackName);
                     saveConfigValue("backpack.name", this.backpackName);
                     updateBackpackGUI(player);
-                    player.sendMessage(locale == Locale.GERMAN ? "§aRucksack-Farbe geändert." : "§aBackpack color changed.");
+                    messages.send(player, "config-changed-color");
                     break;
                 case 2:
                     // Größe ändern (cycle)
                     this.backpackSize = (this.backpackSize == 54) ? 9 : this.backpackSize + 9;
                     saveConfigValue("backpack.size", this.backpackSize);
                     updateBackpackGUI(player);
-                    player.sendMessage(locale == Locale.GERMAN ? "§aRucksack-Größe geändert." : "§aBackpack size changed.");
+                    messages.send(player, "config-changed-size");
                     break;
             }
             player.closeInventory();
@@ -316,7 +319,7 @@ public class BackpackManager implements Listener {
         }
         if (holder.isPreview()) {
             event.setCancelled(true);
-            viewer.sendMessage(locale == Locale.GERMAN ? "§cNur Vorschau - keine Änderungen erlaubt." : "§cPreview mode - changes are not allowed.");
+            messages.send(viewer, "preview-mode");
             return;
         }
 
@@ -343,9 +346,7 @@ public class BackpackManager implements Listener {
                         }
                     }
                     // If no empty slot found, notify player
-                    viewer.sendMessage(locale == Locale.GERMAN ?
-                        "§cDer Rucksack ist voll!" :
-                        "§cThe backpack is full!");
+                    messages.send(viewer, "backpack-full");
                 }
             }
         }
