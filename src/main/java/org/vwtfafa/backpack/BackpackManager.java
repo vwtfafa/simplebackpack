@@ -20,8 +20,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -30,6 +32,9 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
 public class BackpackManager implements Listener {
+    private static final int MIN_BACKPACK_SIZE = 9;
+    private static final int MAX_BACKPACK_SIZE = 54;
+
     private JavaPlugin plugin;
     private final Messages messages;
     private final Map<UUID, Inventory> backpacks = new ConcurrentHashMap<>();
@@ -130,12 +135,50 @@ public class BackpackManager implements Listener {
         Inventory oldInv = backpacks.get(effectiveOwner);
         Inventory newInv = Bukkit.createInventory(BackpackInventoryHolder.backpack(effectiveOwner), backpackSize, backpackName);
         if (oldInv != null) {
-            for (int i = 0; i < Math.min(oldInv.getSize(), newInv.getSize()); i++) {
+            int keptSlots = Math.min(oldInv.getSize(), newInv.getSize());
+            for (int i = 0; i < keptSlots; i++) {
                 newInv.setItem(i, oldInv.getItem(i));
+            }
+            // Hand items from removed slots back to the player so nothing is lost
+            for (int i = keptSlots; i < oldInv.getSize(); i++) {
+                ItemStack item = oldInv.getItem(i);
+                if (item != null && !item.getType().isAir()) {
+                    player.getInventory().addItem(item);
+                }
             }
         }
         backpacks.put(effectiveOwner, newInv);
         player.openInventory(newInv);
+    }
+
+    /**
+     * Checks whether shrinking to newSize is safe: every item from the slots
+     * that would be removed must fit into the player's storage (one slot per
+     * item, conservative). Returns true when nothing blocks the resize.
+     */
+    private boolean canShrinkSafely(Player player, int newSize) {
+        UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
+        Inventory oldInv = backpacks.get(effectiveOwner);
+        if (oldInv == null || oldInv.getSize() <= newSize) {
+            return true;
+        }
+        List<ItemStack> overflow = new ArrayList<>();
+        for (int i = newSize; i < oldInv.getSize(); i++) {
+            ItemStack item = oldInv.getItem(i);
+            if (item != null && !item.getType().isAir()) {
+                overflow.add(item);
+            }
+        }
+        if (overflow.isEmpty()) {
+            return true;
+        }
+        int freeSlots = 0;
+        for (ItemStack content : player.getInventory().getStorageContents()) {
+            if (content == null || content.getType().isAir()) {
+                freeSlots++;
+            }
+        }
+        return freeSlots >= overflow.size();
     }
 
     /**
@@ -298,7 +341,14 @@ public class BackpackManager implements Listener {
                     break;
                 case 2:
                     // Größe ändern (cycle)
-                    this.backpackSize = (this.backpackSize == 54) ? 9 : this.backpackSize + 9;
+                    int newSize = (this.backpackSize == MAX_BACKPACK_SIZE)
+                        ? MIN_BACKPACK_SIZE
+                        : this.backpackSize + MIN_BACKPACK_SIZE;
+                    if (!canShrinkSafely(player, validateBackpackSize(newSize))) {
+                        messages.send(player, "resize-no-space");
+                        break;
+                    }
+                    this.backpackSize = validateBackpackSize(newSize);
                     saveConfigValue("backpack.size", this.backpackSize);
                     updateBackpackGUI(player);
                     messages.send(player, "config-changed-size");
@@ -482,9 +532,9 @@ public class BackpackManager implements Listener {
      */
     private int validateBackpackSize(int size) {
         // Ensure size is multiple of 9 (valid inventory sizes)
-        int validated = Math.max(9, (size / 9) * 9);
+        int validated = Math.max(MIN_BACKPACK_SIZE, (size / MIN_BACKPACK_SIZE) * MIN_BACKPACK_SIZE);
         // Cap at 6 rows (54 slots) as that's the maximum for player inventories
-        return Math.min(validated, 54);
+        return Math.min(validated, MAX_BACKPACK_SIZE);
     }
 
     // Team verlassen

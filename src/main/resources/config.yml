@@ -77,6 +77,7 @@ messages:
     config-changed-name: "§aBackpack name changed."
     config-changed-color: "§aBackpack color changed."
     config-changed-size: "§aBackpack size changed."
+    resize-no-space: "§cNot enough space in your inventory to shrink the backpack."
   de:
     open-success: "§bDein Rucksack ist jetzt geöffnet!"
     no-permission: "§cDu hast keine Berechtigung für diesen Befehl."
@@ -111,3 +112,4 @@ messages:
     config-changed-name: "§aRucksack-Name geändert."
     config-changed-color: "§aRucksack-Farbe geändert."
     config-changed-size: "§aRucksack-Größe geändert."
+    resize-no-space: "§cNicht genug Platz in deinem Inventar, um den Rucksack zu verkleinern."
