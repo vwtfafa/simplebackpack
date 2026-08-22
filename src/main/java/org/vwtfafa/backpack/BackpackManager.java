@@ -1,5 +1,7 @@
 package org.vwtfafa.backpack;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -123,7 +125,7 @@ public class BackpackManager implements Listener {
         UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
         Inventory oldInv = backpacks.get(effectiveOwner);
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(effectiveOwner);
-        Inventory newInv = Bukkit.createInventory(holder, backpackSize, backpackName);
+        Inventory newInv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
         holder.setInventory(newInv);
         if (oldInv != null) {
             int keptSlots = Math.min(oldInv.getSize(), newInv.getSize());
@@ -194,7 +196,7 @@ public class BackpackManager implements Listener {
     private Inventory loadBackpack(UUID uuid) {
         File file = new File(dataFolder, uuid + ".yml");
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(uuid);
-        Inventory inv = Bukkit.createInventory(holder, backpackSize, backpackName);
+        Inventory inv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
         holder.setInventory(inv);
         if (file.exists()) {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
@@ -287,7 +289,8 @@ public class BackpackManager implements Listener {
         Inventory inv = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         // open a new inventory view for admin with same contents
         BackpackInventoryHolder holder = BackpackInventoryHolder.admin(owner, preview);
-        Inventory view = Bukkit.createInventory(holder, inv.getSize(), "Backpack: " + owner.toString());
+        Inventory view = Bukkit.createInventory(holder, inv.getSize(),
+                Component.text("Backpack: " + owner));
         holder.setInventory(view);
         for (int i = 0; i < inv.getSize(); i++) view.setItem(i, inv.getItem(i));
         admin.openInventory(view);
@@ -327,7 +330,7 @@ public class BackpackManager implements Listener {
 
     public void openConfigGUI(Player player) {
         BackpackInventoryHolder holder = BackpackInventoryHolder.config();
-        Inventory gui = Bukkit.createInventory(holder, 9, "Backpack Config");
+        Inventory gui = Bukkit.createInventory(holder, 9, Component.text("Backpack Config"));
         holder.setInventory(gui);
         // Slot 0: Change Name
         ItemStack nameItem = new ItemStack(Material.NAME_TAG);
@@ -544,6 +547,14 @@ public class BackpackManager implements Listener {
         FileConfiguration config = plugin.getConfig();
         config.set(path, value);
         plugin.saveConfig();
+    }
+
+    /**
+     * Converts a configured legacy title (with § color codes) into an
+     * Adventure component for inventory titles.
+     */
+    private Component titleComponent(String legacyTitle) {
+        return LegacyComponentSerializer.legacySection().deserialize(legacyTitle);
     }
 
     /**

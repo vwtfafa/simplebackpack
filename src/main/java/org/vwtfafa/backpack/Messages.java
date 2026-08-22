@@ -1,5 +1,6 @@
 package org.vwtfafa.backpack;
 
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -41,6 +42,8 @@ public class Messages {
 
     /**
      * Sends a localized message, replacing {placeholder} pairs in order.
+     * Legacy color codes in the configured messages are translated to
+     * Adventure components.
      */
     public void send(CommandSender recipient, String key, String... replacements) {
         String message = get(key);
@@ -50,6 +53,6 @@ public class Messages {
         for (int i = 0; i + 1 < replacements.length; i += 2) {
             message = message.replace(replacements[i], replacements[i + 1]);
         }
-        recipient.sendMessage(message);
+        recipient.sendMessage(LegacyComponentSerializer.legacySection().deserialize(message));
     }
 }
