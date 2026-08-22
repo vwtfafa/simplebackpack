@@ -11,27 +11,29 @@ final class BackpackInventoryHolder implements InventoryHolder {
     private final Type type;
     private final UUID owner;
     private final boolean preview;
+    private final int page;
 
-    private BackpackInventoryHolder(Type type, UUID owner, boolean preview) {
+    private BackpackInventoryHolder(Type type, UUID owner, boolean preview, int page) {
         this.type = type;
         this.owner = owner;
         this.preview = preview;
+        this.page = page;
     }
 
     static BackpackInventoryHolder backpack(UUID owner) {
-        return new BackpackInventoryHolder(Type.BACKPACK, owner, false);
+        return new BackpackInventoryHolder(Type.BACKPACK, owner, false, 0);
     }
 
     static BackpackInventoryHolder admin(UUID owner, boolean preview) {
-        return new BackpackInventoryHolder(Type.ADMIN, owner, preview);
+        return new BackpackInventoryHolder(Type.ADMIN, owner, preview, 0);
     }
 
-    static BackpackInventoryHolder adminList() {
-        return new BackpackInventoryHolder(Type.ADMIN_LIST, null, false);
+    static BackpackInventoryHolder adminList(int page) {
+        return new BackpackInventoryHolder(Type.ADMIN_LIST, null, false, page);
     }
 
     static BackpackInventoryHolder config() {
-        return new BackpackInventoryHolder(Type.CONFIG, null, false);
+        return new BackpackInventoryHolder(Type.CONFIG, null, false, 0);
     }
 
     Type getType() {
@@ -44,6 +46,10 @@ final class BackpackInventoryHolder implements InventoryHolder {
 
     boolean isPreview() {
         return preview;
+    }
+
+    int getPage() {
+        return page;
     }
 
     @Override
