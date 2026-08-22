@@ -5,11 +5,12 @@ A persistent, configurable backpack plugin for Minecraft Paper.
 ## Features
 
 - **Personal Persistent Backpacks** - Per-player backpacks with configurable size, name and color
-- **Team Backpacks** - Create/invite/share backpacks with simple team commands
+- **Team Backpacks** - Create/invite/share backpacks with simple team commands (invites expire after 5 minutes)
 - **Classic Mode** - Minimal mode with only `/backpack` and `/bp`
-- **Admin Tools** - Admin GUI, admin edits, audit logging
+- **Admin Tools** - Admin GUI with pagination, admin edits, audit logging
 - **Live Config GUI** - Change backpack configuration in-game with instant apply
 - **Multi-language** - English and German included; messages fully editable
+- **Brigadier Commands** - Registered via Paper's Brigadier lifecycle API with tab completion
 - **Update Checker** - Notifies operators when updates are available on GitHub
 - **bStats Metrics** - Anonymous statistics tracking (plugin ID: 32528)
 - **Unit Tests** - JUnit 5 tests for core functionality
@@ -21,6 +22,10 @@ A persistent, configurable backpack plugin for Minecraft Paper.
 3. Start the server and adjust `config.yml` as needed
 
 ## Commands
+
+Commands are registered through Paper's Brigadier API. Visibility flags
+(`classic-mode`, `show-team-commands`, `show-admin-commands`) apply at startup —
+changing them requires a server restart.
 
 | Command | Description | Permission |
 | ------- | ----------- | ---------- |
@@ -68,6 +73,7 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 ### Team Settings
 - `team.enabled` - Enable team functionality
 - `team.max-size` - Maximum players per team
+- Team invites expire automatically after 5 minutes
 
 ### Admin Settings
 - `admin.enabled` - Enable admin features
@@ -75,13 +81,13 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 - `admin.auto-snapshot` - Auto-create snapshots before admin edits
 
 ### Feature Flags
-- `show-team-commands` - Show/hide team commands
-- `show-admin-commands` - Show/hide admin commands
+- `show-team-commands` - Show/hide team commands (requires restart)
+- `show-admin-commands` - Show/hide admin commands (requires restart)
 - `enable-sharing` - Enable `/backpackshare` command
 
 ### Update Checker
-- `update-checker.notify-ops` - Notify operators about updates
-- `update-checker.notify-chat` - Show update notification in chat
+- `update-checker.notify-chat` - Master switch for chat notifications about updates
+- `update-checker.notify-ops` - Include operators (without the admin permission) among the recipients
 
 ### Messaging
 Messages are organized by language (`en`/`de`) under `messages.<lang>.<key>`.

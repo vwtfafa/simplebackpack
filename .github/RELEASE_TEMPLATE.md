@@ -24,9 +24,9 @@
 
 ### 🔌 Integrations
 
-- **PlaceholderAPI** — `%simplebackpack_enabled%`, `%simplebackpack_size%` (example)
-- **LuckPerms** — Context `simplebackpack:team=true|false`
-- **MiniMessage** — Full RGB & gradient message support
+- **bStats** — Anonymous metrics (can be disabled server-side)
+- **GitHub** — Built-in update checker with chat notifications for operators/admins
+- **Adventure API** — All player-facing messages and titles are sent as components; legacy `§` color codes in configs keep working
 
 ### 🔧 Configuration
 
@@ -35,10 +35,10 @@
 - Backpack name, size, color
 - Team settings (enabled, max size)
 - Admin settings (GUI, auto-snapshot)
-- Command visibility (show team/admin commands)
+- Command visibility (classic mode, show team/admin commands — requires restart)
 - Feature flags (enable sharing)
 - Messaging (enabled, language)
-- Live config reload
+- Live config reload (`live-config-reload=false` disables `/backpackreload`)
 - Keep contents on death
 
 ### 🧱 Compatibility
@@ -46,9 +46,9 @@
 | Platform | Version | Support |
 | -------- | ------- | ------- |
 | **Paper** | @PAPER@+ | ✅ Recommended |
-| **Purpur** | @PAPER@+ | ✅ Works |
-| **Spigot** | @PAPER@+ | ✅ Works (via PaperAPI) |
-| **Bukkit** | @PAPER@+ | ✅ Works (via PaperAPI) |
+| **Purpur** | @PAPER@+ | ✅ Works (Paper fork) |
+
+> Commands use Paper's Brigadier lifecycle API — Spigot/Bukkit servers are not supported.
 
 ### 📦 Installation
 

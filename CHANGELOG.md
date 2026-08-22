@@ -1,5 +1,45 @@
 # Changelog
 
+## 7.0 - 2026-08-22
+
+### Changed (Breaking)
+- Commands are now registered through Paper's Brigadier lifecycle API (`BasicCommand`); the `commands:` section was removed from plugin.yml. Paper 26.2+ is required — Spigot/Bukkit servers are no longer supported.
+- Command visibility flags (`classic-mode`, `show-team-commands`, `show-admin-commands`) apply at registration time; changing them requires a server restart.
+- Update checker semantics: `update-checker.notify-chat` is the master switch for chat notifications, `update-checker.notify-ops` only controls whether operators without the admin permission receive them.
+- `live-config-reload=false` now disables `/backpackreload`.
+- Player-facing messages and inventory titles are sent as Adventure components; legacy `§` color codes in existing configs keep working via `LegacyComponentSerializer`.
+
+### Added
+- Tab completion: player names for `/invite` and `/backpackshare`, plus `accept` and `gui` subcommand suggestions.
+- Admin GUI pagination (45 entries per page) with previous/next buttons and a page info item.
+- Team invites expire after 5 minutes with a dedicated message when accepting too late.
+- New configurable messages: `backpack-full`, `resize-no-space`, `team-invite-expired`, `admin-gui-disabled`.
+
+### Fixed
+- Fixed silent item loss when shrinking the backpack: items from removed slots move to the player inventory; the resize aborts safely if there is not enough space.
+- Fixed drag events bypassing the click cancellation of preview views, the config GUI and the admin list.
+- Fixed a death wiping the whole shared team or temporarily shared backpack when `backpack.keep-on-death` was disabled; only personally owned backpacks are cleared now.
+- Fixed team owner succession being random (HashSet order); the member with the lowest UUID now takes over deterministically.
+- Removed the custom shift-click handler that duplicated vanilla behavior and risked item duplication; backpack views rely on vanilla inventory behavior.
+- The documented `admin.enable-gui` option is now honored; `/backpackadmin gui` reports when it is disabled instead of doing nothing.
+- `clearBackpack` uses the inventory's real size instead of the configured size, which could mismatch after size changes.
+- Null-safe inviter names in team info output.
+
+### Performance & Internals
+- O(1) team ownership lookups through a new `TeamRegistry` reverse index; duplicated owner-search code unified between classes.
+- Quit-time autosave no longer performs main-thread disk I/O (snapshot is taken synchronously, written asynchronously); shutdown saves stay synchronous by design.
+- Audit log writes asynchronously with 5 MB rotation to `backpack-audit.log.old`.
+- Replaced the unbounded per-owner save-lock map with a single IO lock, which also prevents interleaved temp-file writes.
+- Admin GUI stores owner UUIDs in the item's PersistentDataContainer instead of parsing lore text; only clicks inside the admin list are processed.
+- Inventory holders now return their actual inventory instead of null (`InventoryHolder` contract).
+- Localized messaging centralized in a new `Messages` class; hardcoded DE/EN ternaries replaced with config message keys.
+- Dead code removed (`leaveTeam`, `giveItemToAll`, `setBackpacksEnabled`, `isInTeam`) and manager config fields that were never read dropped; `BackpackManager` constructor shrunk from 12 to 6 parameters.
+- Update checker uses `java.net.http.HttpClient`, `getPluginMeta()` and Gson; the org.json dependency was removed because it was never included in the shaded jar (runtime NoClassDefFoundError risk).
+- Obsolete mockito-inline test dependency removed; plugin.yml version is now derived from the Gradle project version.
+
+### Verification
+- `./gradlew.bat clean check` passes: compilation, JUnit tests, Checkstyle and SpotBugs.
+
 ## 6.0 - 2026-08-20
 
 ### Added
