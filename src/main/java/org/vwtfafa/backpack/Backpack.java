@@ -33,6 +33,7 @@ public class Backpack extends JavaPlugin implements Listener {
     private boolean classicMode = false;
     private boolean teamEnabled = true;
     private boolean adminEnabled = true;
+    private boolean adminGuiEnabled = true;
     private boolean showTeamCommands = true;
     private boolean showAdminCommands = true;
     private boolean liveConfigReload = true;
@@ -67,8 +68,9 @@ public class Backpack extends JavaPlugin implements Listener {
         backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teams, teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
         getServer().getPluginManager().registerEvents(this, this);
         // register commands and admin UI
+        // register commands and admin UI
         registerCommands();
-        if (adminEnabled) adminGui = new AdminGUI(backpackManager);
+        if (adminEnabled && adminGuiEnabled) adminGui = new AdminGUI(backpackManager);
         // Initialize update checker
         new UpdateChecker(this).checkForUpdates();
     }
@@ -89,6 +91,7 @@ public class Backpack extends JavaPlugin implements Listener {
         classicMode = config.getBoolean("classic-mode", false);
         teamEnabled = config.getBoolean("team.enabled", true);
         adminEnabled = config.getBoolean("admin.enabled", true);
+        adminGuiEnabled = config.getBoolean("admin.enable-gui", true);
         showTeamCommands = config.getBoolean("show-team-commands", true);
         showAdminCommands = config.getBoolean("show-admin-commands", true);
         liveConfigReload = config.getBoolean("live-config-reload", true);
@@ -321,6 +324,10 @@ public class Backpack extends JavaPlugin implements Listener {
                     if (args.length > 0 && args[0].equalsIgnoreCase("gui")) {
                         if (!player.hasPermission("simplebackpack.admin")) {
                             messages.send(player, "no-permission");
+                            return true;
+                        }
+                        if (adminGui == null) {
+                            messages.send(player, "admin-gui-disabled");
                             return true;
                         }
                         // open admin GUI
