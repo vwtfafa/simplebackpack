@@ -10,6 +10,7 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.Listener;
 
 import java.io.FileWriter;
@@ -398,6 +399,31 @@ public class BackpackManager implements Listener {
                     // If no empty slot found, notify player
                     messages.send(viewer, "backpack-full");
                 }
+            }
+        }
+    }
+
+    /**
+     * Cancels drags that would place items into protected inventories
+     * (config GUI, admin list, preview views). Without this, drag events
+     * bypass the InventoryClickEvent cancellation.
+     */
+    @org.bukkit.event.EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (!(event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)) {
+            return;
+        }
+        boolean editable = (holder.getType() == BackpackInventoryHolder.Type.BACKPACK
+                || holder.getType() == BackpackInventoryHolder.Type.ADMIN)
+                && !holder.isPreview();
+        if (editable) {
+            return;
+        }
+        int topSize = event.getView().getTopInventory().getSize();
+        for (int rawSlot : event.getRawSlots()) {
+            if (rawSlot < topSize) {
+                event.setCancelled(true);
+                return;
             }
         }
     }
