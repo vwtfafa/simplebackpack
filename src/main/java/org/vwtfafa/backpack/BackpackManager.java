@@ -283,8 +283,14 @@ public class BackpackManager implements Listener {
 
 
     public void clearBackpack(Player player) {
+        // Only wipe backpacks the dying player owns themselves; one member
+        // must not empty a shared team or temporarily shared backpack
+        UUID playerId = player.getUniqueId();
+        if (!playerId.equals(resolveEffectiveOwner(playerId))) {
+            return;
+        }
         Inventory inv = getBackpack(player);
-        for (int i = 0; i < backpackSize; i++) {
+        for (int i = 0; i < inv.getSize(); i++) {
             inv.setItem(i, null);
         }
         saveBackpack(player);
