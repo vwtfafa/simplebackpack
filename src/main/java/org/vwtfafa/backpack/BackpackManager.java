@@ -45,12 +45,6 @@ public class BackpackManager implements Listener {
     private File dataFolder;
     private volatile String backpackName;
     private volatile int backpackSize;
-    private boolean classicMode;
-    private boolean adminEnabled;
-    private boolean liveConfigReload;
-    private boolean showTeamCommands;
-    private boolean showAdminCommands;
-    private boolean keepContentsOnDeath;
     private Locale locale;
     private FileConfiguration configCache;
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
@@ -59,18 +53,12 @@ public class BackpackManager implements Listener {
     // without keeping an ever-growing per-owner lock map
     private final Object saveIoLock = new Object();
 
-    public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled, boolean classicMode, boolean adminEnabled, boolean liveConfigReload, boolean showTeamCommands, boolean showAdminCommands, boolean keepContentsOnDeath, Locale locale) {
+    public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled, Locale locale) {
         this.plugin = plugin;
         this.messages = new Messages(plugin);
         this.backpackName = backpackName;
         this.teamRegistry = teamRegistry;
         this.teamEnabled = teamEnabled;
-        this.classicMode = classicMode;
-        this.adminEnabled = adminEnabled;
-        this.liveConfigReload = liveConfigReload;
-        this.showTeamCommands = showTeamCommands;
-        this.showAdminCommands = showAdminCommands;
-        this.keepContentsOnDeath = keepContentsOnDeath;
         this.locale = locale;
         this.dataFolder = new File(plugin.getDataFolder(), "backpacks");
         if (!dataFolder.exists()) dataFolder.mkdirs();
@@ -322,16 +310,10 @@ public class BackpackManager implements Listener {
         saveBackpack(player);
     }
 
-    public void setConfig(String backpackName, int backpackSize, boolean teamEnabled, boolean classicMode, boolean adminEnabled, boolean liveConfigReload, boolean showTeamCommands, boolean showAdminCommands, boolean keepContentsOnDeath, Locale locale) {
+    public void setConfig(String backpackName, int backpackSize, boolean teamEnabled, Locale locale) {
         this.backpackName = backpackName;
         this.backpackSize = backpackSize;
         this.teamEnabled = teamEnabled;
-        this.classicMode = classicMode;
-        this.adminEnabled = adminEnabled;
-        this.liveConfigReload = liveConfigReload;
-        this.showTeamCommands = showTeamCommands;
-        this.showAdminCommands = showAdminCommands;
-        this.keepContentsOnDeath = keepContentsOnDeath;
         this.locale = locale;
         this.messages.reload();
         this.configCache = plugin.getConfig();
@@ -566,38 +548,5 @@ public class BackpackManager implements Listener {
         int validated = Math.max(MIN_BACKPACK_SIZE, (size / MIN_BACKPACK_SIZE) * MIN_BACKPACK_SIZE);
         // Cap at 6 rows (54 slots) as that's the maximum for player inventories
         return Math.min(validated, MAX_BACKPACK_SIZE);
-    }
-
-    // Team verlassen
-    public void leaveTeam(Player player) {
-        UUID uuid = player.getUniqueId();
-        if (teamRegistry.removeMember(uuid)) {
-            messages.send(player, "team-leave");
-        } else {
-            messages.send(player, "not-in-team");
-        }
-    }
-
-    // Admin: Items in alle Backpacks legen
-    public void giveItemToAll(ItemStack item) {
-        for (UUID uuid : backpacks.keySet()) {
-            Inventory inv = backpacks.get(uuid);
-            for (int i = 0; i < inv.getSize(); i++) {
-                if (inv.getItem(i) == null) {
-                    inv.setItem(i, item.clone());
-                    break;
-                }
-            }
-        }
-    }
-
-    // Admin: Backpacks global aktivieren/deaktivieren
-    public void setBackpacksEnabled(boolean enabled) {
-        // Diese Logik wird in der Main-Klasse umgesetzt, hier nur Platzhalter
-    }
-
-    // Team-Backpack nur anzeigen, wenn Spieler in Team ist
-    public boolean isInTeam(Player player) {
-        return teamRegistry.findOwner(player.getUniqueId()) != null;
     }
 }

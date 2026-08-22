@@ -67,7 +67,7 @@ public class Backpack extends JavaPlugin implements Listener {
         loadConfigOptions();
         new Metrics(this, 32528);
         getLogger().info("bStats metrics enabled (ID: 32528)");
-        backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teamRegistry, teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
+        backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teamRegistry, teamEnabled, locale);
         getServer().getPluginManager().registerEvents(this, this);
         // register commands and admin UI
         // register commands and admin UI
@@ -169,7 +169,7 @@ public class Backpack extends JavaPlugin implements Listener {
                 reloadConfig();
                 messages.reload();
                 loadConfigOptions();
-                backpackManager.setConfig(getBackpackName(), getBackpackSize(), teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
+                backpackManager.setConfig(getBackpackName(), getBackpackSize(), teamEnabled, locale);
                 teamMaxSize = Math.max(2, getConfig().getInt("team.max-size", 5));
                 registerCommands();
                 messages.send(sender, "reload-success");
