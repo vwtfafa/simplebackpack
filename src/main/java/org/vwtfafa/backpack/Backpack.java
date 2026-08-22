@@ -293,9 +293,12 @@ public class Backpack extends JavaPlugin implements Listener {
                             if (members.isEmpty()) {
                                 teams.remove(teamOwner);
                             } else if (uuid.equals(teamOwner)) {
-                                UUID newOwner = members.iterator().next();
-                                teams.remove(teamOwner);
-                                teams.put(newOwner, members);
+                                // Deterministic successor: lowest UUID, stable across restarts
+                                UUID newOwner = members.stream().min(UUID::compareTo).orElse(null);
+                                if (newOwner != null) {
+                                    teams.remove(teamOwner);
+                                    teams.put(newOwner, members);
+                                }
                             }
                             saveTeams();
                         }
