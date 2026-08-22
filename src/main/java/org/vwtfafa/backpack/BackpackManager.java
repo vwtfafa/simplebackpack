@@ -392,46 +392,20 @@ public class BackpackManager implements Listener {
     }
 
     @org.bukkit.event.EventHandler
+    /**
+     * Keeps preview views read-only. Editable backpack and admin-edit views
+     * rely on vanilla inventory behavior, including shift-click transfers;
+     * the previous manual transfer duplicated that behavior and risked
+     * item duplication.
+     */
     public void onInventoryClickGlobal(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player)) return;
-        Player viewer = (Player) event.getWhoClicked();
         if (!(event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)
-                || (holder.getType() != BackpackInventoryHolder.Type.BACKPACK
-                && holder.getType() != BackpackInventoryHolder.Type.ADMIN)) {
+                || !holder.isPreview()) {
             return;
         }
-        if (holder.isPreview()) {
-            event.setCancelled(true);
+        event.setCancelled(true);
+        if (event.getWhoClicked() instanceof Player viewer) {
             messages.send(viewer, "preview-mode");
-            return;
-        }
-
-        if (holder.getType() == BackpackInventoryHolder.Type.BACKPACK
-                || holder.getType() == BackpackInventoryHolder.Type.ADMIN) {
-            // shift-click one-click transfer: if clicked in player's inventory and shift-click -> move to backpack
-            if (event.isShiftClick()) {
-                Inventory clicked = event.getClickedInventory();
-                Inventory top = event.getView().getTopInventory();
-                if (clicked != null && clicked.equals(viewer.getInventory()) && top != null) {
-                    ItemStack moving = event.getCurrentItem();
-                    if (moving == null || moving.getType() == Material.AIR) return;
-                    // find first empty slot in top inventory
-                    for (int i = 0; i < top.getSize(); i++) {
-                        if (top.getItem(i) == null || top.getItem(i).getType() == Material.AIR) {
-                            top.setItem(i, moving.clone());
-                            // Remove from the exact clicked slot using index
-                            int clickedSlot = event.getSlot();
-                            if (clickedSlot >= 0 && clickedSlot < clicked.getSize()) {
-                                clicked.setItem(clickedSlot, null);
-                            }
-                            event.setCancelled(true);
-                            return;
-                        }
-                    }
-                    // If no empty slot found, notify player
-                    messages.send(viewer, "backpack-full");
-                }
-            }
         }
     }
 
