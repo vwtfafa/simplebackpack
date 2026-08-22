@@ -29,7 +29,7 @@ public class Backpack extends JavaPlugin implements Listener {
     private BackpackManager backpackManager;
     private AdminGUI adminGui;
     private Messages messages;
-    private Map<UUID, Set<UUID>> teams = new HashMap<>();
+    private final TeamRegistry teamRegistry = new TeamRegistry();
     private Map<UUID, TeamInvite> pendingInvites = new HashMap<>();
     private Locale locale = Locale.ENGLISH;
     private boolean classicMode = false;
@@ -67,7 +67,7 @@ public class Backpack extends JavaPlugin implements Listener {
         loadConfigOptions();
         new Metrics(this, 32528);
         getLogger().info("bStats metrics enabled (ID: 32528)");
-        backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teams, teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
+        backpackManager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teamRegistry, teamEnabled, classicMode, adminEnabled, liveConfigReload, showTeamCommands, showAdminCommands, keepContentsOnDeath, locale);
         getServer().getPluginManager().registerEvents(this, this);
         // register commands and admin UI
         // register commands and admin UI
@@ -200,13 +200,13 @@ public class Backpack extends JavaPlugin implements Listener {
                         return true;
                     }
                     // Check if already in a team
-                    UUID owner = findTeamOwner(player.getUniqueId());
-                    if (owner != null && teams.get(owner).size() >= teamMaxSize) {
+                    UUID owner = teamRegistry.findOwner(player.getUniqueId());
+                    if (owner != null && teamRegistry.membersOf(owner).size() >= teamMaxSize) {
                         messages.send(player, "team-full");
                         return true;
                     }
                     // Check if target already in a team
-                    if (teams.containsKey(target.getUniqueId()) && !teams.get(target.getUniqueId()).isEmpty()) {
+                    if (teamRegistry.findOwner(target.getUniqueId()) != null) {
                         messages.send(player, "target-in-team");
                         return true;
                     }
@@ -239,13 +239,14 @@ public class Backpack extends JavaPlugin implements Listener {
                         TeamInvite invite = pendingInvites.remove(targetId);
                         if (invite != null && !invite.isExpired()) {
                             UUID inviterId = invite.inviter();
-                            UUID owner = findTeamOwner(inviterId);
-                            Set<UUID> newTeam = owner == null ? new HashSet<>() : teams.get(owner);
-                            if (owner == null) owner = inviterId;
-                            newTeam.add(owner);
-                            newTeam.add(targetId);
-                            teams.remove(inviterId);
-                            teams.put(owner, newTeam);
+                            UUID owner = teamRegistry.findOwner(inviterId);
+                            if (owner == null) {
+                                Set<UUID> members = new HashSet<>();
+                                members.add(inviterId);
+                                teamRegistry.createTeam(inviterId, members);
+                            } else {
+                                teamRegistry.addMember(owner, targetId);
+                            }
                             saveTeams();
                             OfflinePlayer inviterOffline = getServer().getOfflinePlayer(inviterId);
                             String inviterName = (inviterOffline != null && inviterOffline.getName() != null) ? inviterOffline.getName() : inviterId.toString();
@@ -283,33 +284,10 @@ public class Backpack extends JavaPlugin implements Listener {
                     }
                     Player player = (Player) sender;
                     UUID uuid = player.getUniqueId();
-                    // Check if player is in a team (as owner or member)
-                    boolean isInTeam = false;
-                    UUID teamOwner = null;
-                    for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
-                        if (entry.getValue().contains(uuid)) {
-                            isInTeam = true;
-                            teamOwner = entry.getKey();
-                            break;
-                        }
-                    }
-                    if (isInTeam) {
-                        // Remove player from team
-                        if (teams.containsKey(teamOwner)) {
-                            Set<UUID> members = teams.get(teamOwner);
-                            members.remove(uuid);
-                            if (members.isEmpty()) {
-                                teams.remove(teamOwner);
-                            } else if (uuid.equals(teamOwner)) {
-                                // Deterministic successor: lowest UUID, stable across restarts
-                                UUID newOwner = members.stream().min(UUID::compareTo).orElse(null);
-                                if (newOwner != null) {
-                                    teams.remove(teamOwner);
-                                    teams.put(newOwner, members);
-                                }
-                            }
-                            saveTeams();
-                        }
+                    // removeMember handles empty teams and deterministic
+                    // owner succession internally
+                    if (teamRegistry.removeMember(uuid)) {
+                        saveTeams();
                         messages.send(player, "team-leave");
                     } else {
                         messages.send(player, "not-in-team");
@@ -397,16 +375,8 @@ public class Backpack extends JavaPlugin implements Listener {
 
     private void showTeamInfo(Player player) {
         UUID uuid = player.getUniqueId();
-        // Check if player is in a team (as owner or member)
-        UUID teamOwner = null;
-        Set<UUID> teamMembers = null;
-        for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
-            if (entry.getValue().contains(uuid)) {
-                teamOwner = entry.getKey();
-                teamMembers = entry.getValue();
-                break;
-            }
-        }
+        UUID teamOwner = teamRegistry.findOwner(uuid);
+        Set<UUID> teamMembers = teamOwner == null ? null : teamRegistry.membersOf(teamOwner);
         if (teamMembers == null || teamMembers.isEmpty()) {
             // Check if there's a pending invite
             TeamInvite invite = pendingInvites.get(uuid);
@@ -435,15 +405,8 @@ public class Backpack extends JavaPlugin implements Listener {
         messages.send(player, "team-members", "{members}", sb.toString());
     }
 
-    private UUID findTeamOwner(UUID member) {
-        for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
-            if (entry.getValue().contains(member)) return entry.getKey();
-        }
-        return null;
-    }
-
     private void loadTeams() {
-        teams.clear();
+        teamRegistry.clear();
         if (teamsFile == null || !teamsFile.exists()) return;
         YamlConfiguration config = YamlConfiguration.loadConfiguration(teamsFile);
         for (String ownerKey : config.getStringList("teams.owners")) {
@@ -453,8 +416,7 @@ public class Backpack extends JavaPlugin implements Listener {
                 for (String memberKey : config.getStringList("teams." + ownerKey)) {
                     members.add(UUID.fromString(memberKey));
                 }
-                members.add(owner);
-                teams.put(owner, members);
+                teamRegistry.createTeam(owner, members);
             } catch (IllegalArgumentException ignored) {
                 getLogger().warning("Ignoring invalid team entry: " + ownerKey);
             }
@@ -465,11 +427,11 @@ public class Backpack extends JavaPlugin implements Listener {
         if (teamsFile == null) return;
         YamlConfiguration config = new YamlConfiguration();
         List<String> owners = new java.util.ArrayList<>();
-        for (UUID owner : teams.keySet()) {
-            owners.add(owner.toString());
+        for (Map.Entry<UUID, Set<UUID>> entry : teamRegistry.entries()) {
+            owners.add(entry.getKey().toString());
             List<String> members = new java.util.ArrayList<>();
-            for (UUID member : teams.get(owner)) members.add(member.toString());
-            config.set("teams." + owner, members);
+            for (UUID member : entry.getValue()) members.add(member.toString());
+            config.set("teams." + entry.getKey(), members);
         }
         config.set("teams.owners", owners);
         try {

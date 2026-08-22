@@ -39,7 +39,7 @@ public class BackpackManager implements Listener {
     private JavaPlugin plugin;
     private final Messages messages;
     private final Map<UUID, Inventory> backpacks = new ConcurrentHashMap<>();
-    private Map<UUID, Set<UUID>> teams;
+    private TeamRegistry teamRegistry;
     private boolean teamEnabled;
     private File dataFolder;
     private volatile String backpackName;
@@ -56,11 +56,11 @@ public class BackpackManager implements Listener {
     private final File auditLogFile;
     private final Map<UUID, Object> saveLocks = new ConcurrentHashMap<>();
 
-    public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, Map<UUID, Set<UUID>> teams, boolean teamEnabled, boolean classicMode, boolean adminEnabled, boolean liveConfigReload, boolean showTeamCommands, boolean showAdminCommands, boolean keepContentsOnDeath, Locale locale) {
+    public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled, boolean classicMode, boolean adminEnabled, boolean liveConfigReload, boolean showTeamCommands, boolean showAdminCommands, boolean keepContentsOnDeath, Locale locale) {
         this.plugin = plugin;
         this.messages = new Messages(plugin);
         this.backpackName = backpackName;
-        this.teams = teams;
+        this.teamRegistry = teamRegistry;
         this.teamEnabled = teamEnabled;
         this.classicMode = classicMode;
         this.adminEnabled = adminEnabled;
@@ -95,25 +95,22 @@ public class BackpackManager implements Listener {
             UUID owner = session.getOwner();
             return backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         }
-        if (teamEnabled && getTeamOwner(uuid) != null && !getTeamOwner(uuid).equals(uuid)) {
+        if (teamEnabled) {
             UUID teamOwner = getTeamOwner(uuid);
-            Inventory teamInv = backpacks.computeIfAbsent(teamOwner, u -> loadBackpack(teamOwner));
-            return teamInv;
+            if (!teamOwner.equals(uuid)) {
+                return backpacks.computeIfAbsent(teamOwner, u -> loadBackpack(teamOwner));
+            }
         }
         return backpacks.computeIfAbsent(uuid, u -> loadBackpack(uuid));
     }
 
     /**
-     * Returns the team owner UUID for a given team member.
-     * The owner is the map key whose set contains the member.
+     * Returns the team owner UUID for a given team member,
+     * or the member itself when they have no team.
      */
     private UUID getTeamOwner(UUID member) {
-        for (Map.Entry<UUID, Set<UUID>> entry : teams.entrySet()) {
-            if (entry.getValue().contains(member)) {
-                return entry.getKey();
-            }
-        }
-        return member; // fallback
+        UUID owner = teamRegistry.findOwner(member);
+        return owner != null ? owner : member;
     }
 
     /**
@@ -572,11 +569,10 @@ public class BackpackManager implements Listener {
     // Team verlassen
     public void leaveTeam(Player player) {
         UUID uuid = player.getUniqueId();
-        if (teams.containsKey(uuid)) {
-            teams.remove(uuid);
-            player.sendMessage(locale == Locale.GERMAN ? "§aDu hast das Team verlassen." : "§aYou have left the team.");
+        if (teamRegistry.removeMember(uuid)) {
+            messages.send(player, "team-leave");
         } else {
-            player.sendMessage(locale == Locale.GERMAN ? "§cDu bist in keinem Team." : "§cYou are not in a team.");
+            messages.send(player, "not-in-team");
         }
     }
 
@@ -600,6 +596,6 @@ public class BackpackManager implements Listener {
 
     // Team-Backpack nur anzeigen, wenn Spieler in Team ist
     public boolean isInTeam(Player player) {
-        return teams.containsKey(player.getUniqueId()) && !teams.get(player.getUniqueId()).isEmpty();
+        return teamRegistry.findOwner(player.getUniqueId()) != null;
     }
 }
