@@ -1,6 +1,6 @@
 name: SimpleBackpack
 main: org.vwtfafa.backpack.Backpack
-version: 6.0
+version: '${version}'
 api-version: 26.2
 commands:
   backpack:
