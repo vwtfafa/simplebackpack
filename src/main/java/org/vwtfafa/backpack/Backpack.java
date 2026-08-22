@@ -24,11 +24,13 @@ import java.io.File;
 import java.io.IOException;
 
 public class Backpack extends JavaPlugin implements Listener {
+    private static final long INVITE_EXPIRY_MILLIS = 5L * 60L * 1000L;
+
     private BackpackManager backpackManager;
     private AdminGUI adminGui;
     private Messages messages;
     private Map<UUID, Set<UUID>> teams = new HashMap<>();
-    private Map<UUID, UUID> pendingInvites = new HashMap<>();
+    private Map<UUID, TeamInvite> pendingInvites = new HashMap<>();
     private Locale locale = Locale.ENGLISH;
     private boolean classicMode = false;
     private boolean teamEnabled = true;
@@ -208,7 +210,9 @@ public class Backpack extends JavaPlugin implements Listener {
                         messages.send(player, "target-in-team");
                         return true;
                     }
-                    pendingInvites.put(target.getUniqueId(), player.getUniqueId());
+                    pendingInvites.values().removeIf(TeamInvite::isExpired);
+                    pendingInvites.put(target.getUniqueId(),
+                            new TeamInvite(player.getUniqueId(), System.currentTimeMillis() + INVITE_EXPIRY_MILLIS));
                     String targetName = target.getName() != null ? target.getName() : target.getUniqueId().toString();
                     String playerName = player.getName() != null ? player.getName() : player.getUniqueId().toString();
                     messages.send(player, "team-invite", "{player}", targetName);
@@ -232,8 +236,9 @@ public class Backpack extends JavaPlugin implements Listener {
                     // Check if team accept is requested
                     if (args.length > 0 && args[0].equalsIgnoreCase("accept")) {
                         UUID targetId = player.getUniqueId();
-                        if (pendingInvites.containsKey(targetId)) {
-                            UUID inviterId = pendingInvites.remove(targetId);
+                        TeamInvite invite = pendingInvites.remove(targetId);
+                        if (invite != null && !invite.isExpired()) {
+                            UUID inviterId = invite.inviter();
                             UUID owner = findTeamOwner(inviterId);
                             Set<UUID> newTeam = owner == null ? new HashSet<>() : teams.get(owner);
                             if (owner == null) owner = inviterId;
@@ -251,6 +256,9 @@ public class Backpack extends JavaPlugin implements Listener {
                                 messages.send(inviter, "team-joined", "{player}", player.getName());
                             }
                         } else {
+                            if (invite != null) {
+                                messages.send(player, "team-invite-expired");
+                            }
                             // Show team members or not in team
                             showTeamInfo(player);
                         }
@@ -401,10 +409,10 @@ public class Backpack extends JavaPlugin implements Listener {
         }
         if (teamMembers == null || teamMembers.isEmpty()) {
             // Check if there's a pending invite
-            if (pendingInvites.containsKey(uuid)) {
-                UUID inviter = pendingInvites.get(uuid);
-                OfflinePlayer inviterOffline = getServer().getOfflinePlayer(inviter);
-                String inviterName = inviterOffline.getName() != null ? inviterOffline.getName() : inviter.toString();
+            TeamInvite invite = pendingInvites.get(uuid);
+            if (invite != null && !invite.isExpired()) {
+                OfflinePlayer inviterOffline = getServer().getOfflinePlayer(invite.inviter());
+                String inviterName = inviterOffline.getName() != null ? inviterOffline.getName() : invite.inviter().toString();
                 messages.send(player, "team-pending", "{player}", inviterName);
             } else {
                 messages.send(player, "not-in-team");
