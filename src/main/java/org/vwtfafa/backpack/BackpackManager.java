@@ -226,6 +226,62 @@ public class BackpackManager implements Listener {
         return playerId;
     }
 
+    /**
+     * Reads the owner's backpack file off the main thread and installs it
+     * later, so the first open never blocks on disk I/O. Silently skipped
+     * when the backpack got loaded meanwhile or when the file contains items
+     * in slots beyond the configured size (needs the full recovery path).
+     */
+    void preloadBackpack(UUID ownerId) {
+        if (backpacks.containsKey(ownerId)) {
+            return;
+        }
+        File file = new File(dataFolder, ownerId + ".yml");
+        plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
+            ItemStack[] contents = readInventoryFile(file);
+            Bukkit.getGlobalRegionScheduler().run(plugin,
+                    t -> applyPreloadedContents(ownerId, contents));
+        });
+    }
+
+    /**
+     * Reads stored slots without touching inventories; returns null when the
+     * stored size exceeds the configured one and recovery would be needed.
+     */
+    private ItemStack[] readInventoryFile(File file) {
+        ItemStack[] contents = new ItemStack[MAX_BACKPACK_SIZE];
+        if (!file.exists()) {
+            return contents;
+        }
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+            for (int i = 0; i < MAX_BACKPACK_SIZE; i++) {
+                contents[i] = config.getItemStack("slot" + i);
+                if (i >= backpackSize && contents[i] != null && !contents[i].getType().isAir()) {
+                    return null;
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to preload backpack " + file.getName()
+                    + ": " + e.getMessage());
+            return null;
+        }
+        return contents;
+    }
+
+    private void applyPreloadedContents(UUID ownerId, ItemStack[] contents) {
+        if (contents == null || backpacks.containsKey(ownerId)) {
+            return;
+        }
+        BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(ownerId);
+        Inventory inv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
+        holder.setInventory(inv);
+        for (int i = 0; i < backpackSize; i++) {
+            inv.setItem(i, contents[i]);
+        }
+        backpacks.put(ownerId, inv);
+    }
+
     private Inventory loadBackpack(UUID uuid) {
         File file = new File(dataFolder, uuid + ".yml");
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(uuid);

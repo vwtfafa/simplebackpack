@@ -117,6 +117,17 @@ public class Backpack extends JavaPlugin implements Listener {
     }
 
     @EventHandler
+    public void onPlayerJoinPreload(PlayerJoinEvent event) {
+        if (manager == null) {
+            return;
+        }
+        // Warm the cache so the first open doesn't wait on disk I/O
+        Player player = event.getPlayer();
+        manager.preloadBackpack(player.getUniqueId());
+        manager.preloadBackpack(manager.resolveEffectiveOwner(player.getUniqueId()));
+    }
+
+    @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         // Drop the quitting player's pending invite so it cannot be accepted later
