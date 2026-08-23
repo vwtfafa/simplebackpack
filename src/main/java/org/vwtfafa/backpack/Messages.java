@@ -1,5 +1,7 @@
 package org.vwtfafa.backpack;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -8,6 +10,9 @@ import org.bukkit.plugin.java.JavaPlugin;
  * Central access to localized player messages with English fallback.
  */
 public class Messages {
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+    private static final LegacyComponentSerializer LEGACY_SECTION = LegacyComponentSerializer.legacySection();
+
     private final JavaPlugin plugin;
     private String language;
     private boolean enabled;
@@ -23,6 +28,18 @@ public class Messages {
     public void reload() {
         enabled = plugin.getConfig().getBoolean("messages-enabled", true);
         language = "de".equalsIgnoreCase(plugin.getConfig().getString("language", "en")) ? "de" : "en";
+    }
+
+    /**
+     * Deserializes a configured string that may use either MiniMessage tags
+     * or legacy section-sign color codes into an Adventure component, keeping
+     * configs from older versions working unchanged.
+     */
+    public static Component deserialize(String raw) {
+        if (raw.indexOf('§') >= 0) {
+            return LEGACY_SECTION.deserialize(raw);
+        }
+        return MINI_MESSAGE.deserialize(raw);
     }
 
     /**
@@ -42,8 +59,6 @@ public class Messages {
 
     /**
      * Sends a localized message, replacing {placeholder} pairs in order.
-     * Legacy color codes in the configured messages are translated to
-     * Adventure components.
      */
     public void send(CommandSender recipient, String key, String... replacements) {
         String message = get(key);
@@ -53,6 +68,6 @@ public class Messages {
         for (int i = 0; i + 1 < replacements.length; i += 2) {
             message = message.replace(replacements[i], replacements[i + 1]);
         }
-        recipient.sendMessage(LegacyComponentSerializer.legacySection().deserialize(message));
+        recipient.sendMessage(deserialize(message));
     }
 }

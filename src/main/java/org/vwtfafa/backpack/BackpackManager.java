@@ -1,7 +1,10 @@
 package org.vwtfafa.backpack;
 
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -40,6 +43,9 @@ public class BackpackManager implements Listener {
     private static final int MIN_BACKPACK_SIZE = 9;
     private static final int MAX_BACKPACK_SIZE = 54;
     private static final long AUDIT_LOG_MAX_BYTES = 5L * 1024L * 1024L;
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+    private static final List<NamedTextColor> TITLE_COLOR_CYCLE =
+            List.of(NamedTextColor.AQUA, NamedTextColor.GREEN, NamedTextColor.RED);
 
     private JavaPlugin plugin;
     private final Messages messages;
@@ -420,7 +426,7 @@ public class BackpackManager implements Listener {
             switch (event.getSlot()) {
                 case 0:
                     // Name ändern (Dialog oder Standard)
-                    this.backpackName = locale == Locale.GERMAN ? "§bRucksack" : "§bBackpack";
+                    this.backpackName = locale == Locale.GERMAN ? "<aqua>Rucksack" : "<aqua>Backpack";
                     saveConfigValue("backpack.name", this.backpackName);
                     updateBackpackGUI(player);
                     messages.send(player, "config-changed-name");
@@ -587,33 +593,18 @@ public class BackpackManager implements Listener {
     }
 
     /**
-     * Cycles the color prefix of the backpack name.
-     * Cycle order: §b (aqua) -> §a (green) -> §c (red) -> §b (aqua) ...
+     * Cycles the title color through aqua, green and red. The input may be a
+     * legacy or MiniMessage string; the result is always re-serialized as
+     * MiniMessage.
      */
     private String cycleColor(String name) {
-        // Define the color cycle order
-        String[] colors = {"§b", "§a", "§c"};
-        // Find current color index
-        int currentIdx = -1;
-        for (int i = 0; i < colors.length; i++) {
-            if (name.startsWith(colors[i])) {
-                currentIdx = i;
-                break;
-            }
-        }
-        // Determine next color
-        int nextIdx;
-        if (currentIdx == -1) {
-            nextIdx = 0; // default to aqua if no color found
-        } else {
-            nextIdx = (currentIdx + 1) % colors.length;
-        }
-        // Remove any existing color code prefix and prepend the new one
-        String baseName = name;
-        if (baseName.startsWith("§")) {
-            baseName = baseName.substring(2);
-        }
-        return colors[nextIdx] + baseName;
+        Component current = Messages.deserialize(name);
+        TextColor color = current.color();
+        int index = color instanceof NamedTextColor named ? TITLE_COLOR_CYCLE.indexOf(named) : -1;
+        NamedTextColor next = index < 0 ? TITLE_COLOR_CYCLE.get(0)
+                : TITLE_COLOR_CYCLE.get((index + 1) % TITLE_COLOR_CYCLE.size());
+        String baseName = PlainTextComponentSerializer.plainText().serialize(current);
+        return MINI_MESSAGE.serialize(Component.text(baseName, next));
     }
 
     private void saveConfigValue(String path, Object value) {
@@ -623,11 +614,11 @@ public class BackpackManager implements Listener {
     }
 
     /**
-     * Converts a configured legacy title (with § color codes) into an
+     * Converts a configured title (legacy or MiniMessage format) into an
      * Adventure component for inventory titles.
      */
-    private Component titleComponent(String legacyTitle) {
-        return LegacyComponentSerializer.legacySection().deserialize(legacyTitle);
+    private Component titleComponent(String title) {
+        return Messages.deserialize(title);
     }
 
     /**
