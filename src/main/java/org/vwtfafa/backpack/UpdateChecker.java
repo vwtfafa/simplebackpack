@@ -121,7 +121,7 @@ public class UpdateChecker {
     /**
      * Compares two version strings
      */
-    private boolean isNewerVersion(String newVersion, String currentVersion) {
+    static boolean isNewerVersion(String newVersion, String currentVersion) {
         try {
             // Remove 'v' prefix if present
             newVersion = newVersion.replaceFirst("^v", "");

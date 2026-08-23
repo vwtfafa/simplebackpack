@@ -1,7 +1,6 @@
 package org.vwtfafa.backpack;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -9,38 +8,34 @@ import org.junit.jupiter.api.Test;
 class UpdateCheckerTest {
 
     @Test
-    void testIsNewerVersion() throws Exception {
-        assertNotNull(UpdateChecker.class.getDeclaredMethod("isNewerVersion", String.class, String.class));
-        assertTrue(java.lang.reflect.Modifier.isPrivate(UpdateChecker.class.getDeclaredMethod("isNewerVersion", String.class, String.class).getModifiers()));
-
-        assertEquals(false, compareVersions("1.0", "1.0"));
-        assertEquals(true, compareVersions("1.1", "1.0"));
-        assertEquals(false, compareVersions("0.9", "1.0"));
-        assertEquals(true, compareVersions("2.0", "1.0"));
-        assertEquals(true, compareVersions("1.0.1", "1.0"));
-        assertEquals(true, compareVersions("1.0.2", "1.0"));
-        assertEquals(false, compareVersions("1.0", "1.0.1"));
-        assertEquals(true, compareVersions("1.0.1", "1.0.0"));
+    void equalVersionsAreNotNewer() {
+        assertFalse(UpdateChecker.isNewerVersion("1.0", "1.0"));
+        assertFalse(UpdateChecker.isNewerVersion("1.0.0", "1.0"));
     }
 
-    private boolean compareVersions(String newVersion, String currentVersion) {
-        try {
-            newVersion = newVersion.replaceFirst("^v", "");
-            currentVersion = currentVersion.replaceFirst("^v", "");
+    @Test
+    void higherVersionsAreNewer() {
+        assertTrue(UpdateChecker.isNewerVersion("1.1", "1.0"));
+        assertTrue(UpdateChecker.isNewerVersion("2.0", "1.0"));
+        assertTrue(UpdateChecker.isNewerVersion("1.0.1", "1.0"));
+        assertTrue(UpdateChecker.isNewerVersion("1.0.1", "1.0.0"));
+    }
 
-            String[] newParts = newVersion.split("\\.");
-            String[] currentParts = currentVersion.split("\\.");
+    @Test
+    void lowerVersionsAreNotNewer() {
+        assertFalse(UpdateChecker.isNewerVersion("0.9", "1.0"));
+        assertFalse(UpdateChecker.isNewerVersion("1.0", "1.0.1"));
+    }
 
-            for (int i = 0; i < Math.max(newParts.length, currentParts.length); i++) {
-                int newNum = i < newParts.length ? Integer.parseInt(newParts[i]) : 0;
-                int currentNum = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0;
+    @Test
+    void vPrefixIsIgnored() {
+        assertTrue(UpdateChecker.isNewerVersion("v2.0", "1.9"));
+        assertFalse(UpdateChecker.isNewerVersion("v1.0", "1.5"));
+    }
 
-                if (newNum > currentNum) return true;
-                if (newNum < currentNum) return false;
-            }
-            return false;
-        } catch (Exception e) {
-            return false;
-        }
+    @Test
+    void unparseableVersionsNeverReportUpdates() {
+        assertFalse(UpdateChecker.isNewerVersion("not-a-version", "1.0"));
+        assertFalse(UpdateChecker.isNewerVersion("1.0-beta", "1.0"));
     }
 }

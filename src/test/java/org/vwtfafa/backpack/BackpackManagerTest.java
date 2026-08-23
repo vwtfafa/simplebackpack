@@ -17,10 +17,10 @@ class BackpackManagerTest {
 
         assertEquals(player, session.owner());
         assertFalse(session.isExpired());
-        }
+    }
 
-        @Test
-        void inventoryHoldersExposeTheirPurpose() {
+    @Test
+    void inventoryHoldersExposeTheirPurpose() {
         UUID owner = UUID.randomUUID();
 
         assertEquals(BackpackInventoryHolder.Type.BACKPACK,

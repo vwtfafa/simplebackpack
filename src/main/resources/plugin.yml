@@ -33,7 +33,7 @@ description: >
     - Personal Backpacks: per-player persistent backpacks with configurable size, name and color.
     - Team Backpacks: create/invite/share backpacks with simple team commands.
     - Classic Mode: minimal mode with only /backpack and /bp.
-    - Admin Tools: admin GUI, admin insert, live reload and audit logging.
+    - Admin Tools: admin GUI, live reload and audit logging.
     - Live Config GUI: change size, color and other options in-game with instant apply.
     - Multi-language: English and German included; messages fully editable.
     - Improved Storage: persistent YAML storage (compatible with previous versions) with async saves.
