@@ -394,6 +394,19 @@ public class BackpackManager implements Listener {
         saveInventoryAsync(ownerId, snapshot(inv), "death");
     }
 
+    /**
+     * Wipes the backpack of the given effective owner on behalf of an admin
+     * and persists the empty state asynchronously.
+     */
+    public void clearForAdmin(UUID ownerId, Player admin) {
+        Inventory inv = backpacks.computeIfAbsent(ownerId, u -> loadBackpack(ownerId));
+        for (int i = 0; i < inv.getSize(); i++) {
+            inv.setItem(i, null);
+        }
+        saveInventoryAsync(ownerId, snapshot(inv), "admin-clear");
+        logAudit("ADMIN_CLEAR " + admin.getName() + " -> " + ownerId.toString());
+    }
+
     public void setConfig(String backpackName, int backpackSize, boolean teamEnabled, Locale locale) {
         this.backpackName = backpackName;
         this.backpackSize = backpackSize;

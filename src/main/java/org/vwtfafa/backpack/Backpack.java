@@ -202,6 +202,15 @@ public class Backpack extends JavaPlugin implements Listener {
         return backpacksEnabled;
     }
 
+    /**
+     * Flips the global enable flag live and persists it to the config.
+     */
+    void setBackpacksEnabled(boolean enabled) {
+        backpacksEnabled = enabled;
+        getConfig().set("backpacks-enabled", enabled);
+        saveConfig();
+    }
+
     boolean allowInCreative() {
         return allowInCreative;
     }
