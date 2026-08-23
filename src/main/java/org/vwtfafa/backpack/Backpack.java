@@ -50,7 +50,7 @@ public class Backpack extends JavaPlugin implements Listener {
         new Metrics(this, BSTATS_PLUGIN_ID);
         getLogger().info("bStats metrics enabled (ID: " + BSTATS_PLUGIN_ID + ")");
         manager = new BackpackManager(this, messages, settings.backpackName(), settings.backpackSize(),
-                teamRegistry, settings.teamEnabled(), settings.locale());
+                teamRegistry, settings.teamEnabled());
         getServer().getPluginManager().registerEvents(this, this);
         registerCommands();
         if (settings.adminEnabled() && settings.adminGuiEnabled()) {
@@ -97,7 +97,7 @@ public class Backpack extends JavaPlugin implements Listener {
         messages.reload();
         loadConfigOptions();
         manager.setConfig(settings.backpackName(), settings.backpackSize(),
-                settings.teamEnabled(), settings.locale());
+                settings.teamEnabled());
     }
 
     @EventHandler

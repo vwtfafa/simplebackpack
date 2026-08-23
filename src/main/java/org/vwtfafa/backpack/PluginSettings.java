@@ -4,7 +4,6 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Snapshot of all configuration options, rebuilt by {@link #load} whenever
@@ -12,7 +11,6 @@ import java.util.Locale;
  * at runtime; other changes require a reload or restart.
  */
 final class PluginSettings {
-    private Locale locale = Locale.ENGLISH;
     private String backpackName = "<aqua>Simple Backpack";
     private int backpackSize = 27;
     private boolean classicMode;
@@ -38,10 +36,6 @@ final class PluginSettings {
         FileConfiguration config = plugin.getConfig();
         PluginSettings settings = new PluginSettings();
 
-        String language = config.getString("language", "en");
-        if ("de".equalsIgnoreCase(language)) {
-            settings.locale = Locale.GERMAN;
-        }
         settings.classicMode = config.getBoolean("classic-mode", false);
         settings.teamEnabled = config.getBoolean("team.enabled", true);
         settings.adminEnabled = config.getBoolean("admin.enabled", true);
@@ -60,10 +54,6 @@ final class PluginSettings {
         settings.backpackSize = config.getInt("backpack.size", settings.backpackSize);
         settings.disabledWorlds = List.copyOf(config.getStringList("backpack.disabled-worlds"));
         return settings;
-    }
-
-    Locale locale() {
-        return locale;
     }
 
     String backpackName() {

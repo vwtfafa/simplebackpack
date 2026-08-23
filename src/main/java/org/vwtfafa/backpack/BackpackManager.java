@@ -33,7 +33,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -56,7 +55,6 @@ public class BackpackManager implements Listener {
     private final File dataFolder;
     private volatile String backpackName;
     private volatile int backpackSize;
-    private Locale locale;
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
     // Owners whose backpack an inventory-close event just persisted; lets the
     // quit-time autosave skip the redundant second write on disconnects
@@ -67,15 +65,16 @@ public class BackpackManager implements Listener {
     // without keeping an ever-growing per-owner lock map
     private final Object saveIoLock = new Object();
 
-    public BackpackManager(JavaPlugin plugin, Messages messages, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled, Locale locale) {
+    public BackpackManager(JavaPlugin plugin, Messages messages, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled) {
         this.plugin = plugin;
         this.messages = messages;
         this.backpackName = backpackName;
         this.teamRegistry = teamRegistry;
         this.teamEnabled = teamEnabled;
-        this.locale = locale;
         this.dataFolder = new File(plugin.getDataFolder(), "backpacks");
-        if (!dataFolder.exists()) dataFolder.mkdirs();
+        if (!dataFolder.exists() && !dataFolder.mkdirs()) {
+            plugin.getLogger().warning("Failed to create backpack data folder: " + dataFolder);
+        }
         this.auditLogFile = new File(plugin.getDataFolder(), "backpack-audit.log");
         try {
             if (!this.auditLogFile.exists()) this.auditLogFile.createNewFile();
@@ -401,7 +400,8 @@ public class BackpackManager implements Listener {
     public Set<UUID> listKnownBackpacks() {
         // list files in dataFolder
         Set<UUID> result = new HashSet<>();
-        File[] files = dataFolder.listFiles((d, name) -> name.endsWith(".yml"));
+        File[] files = dataFolder.listFiles((d, name) ->
+                name.endsWith(".yml") && !name.endsWith(".overflow.yml"));
         if (files != null) {
             for (File f : files) {
                 try {
@@ -471,11 +471,10 @@ public class BackpackManager implements Listener {
         logAudit("ADMIN_CLEAR " + admin.getName() + " -> " + ownerId.toString());
     }
 
-    public void setConfig(String backpackName, int backpackSize, boolean teamEnabled, Locale locale) {
+    public void setConfig(String backpackName, int backpackSize, boolean teamEnabled) {
         this.backpackName = backpackName;
         this.backpackSize = backpackSize;
         this.teamEnabled = teamEnabled;
-        this.locale = locale;
     }
 
     public void openConfigGUI(Player player) {
@@ -508,7 +507,7 @@ public class BackpackManager implements Listener {
             switch (event.getSlot()) {
                 case 0:
                     // Name ändern (Dialog oder Standard)
-                    this.backpackName = locale == Locale.GERMAN ? "<aqua>Rucksack" : "<aqua>Backpack";
+                    this.backpackName = MINI_MESSAGE.serialize(messages.component("gui-default-backpack-name"));
                     saveConfigValue("backpack.name", this.backpackName);
                     updateBackpackGUI(player);
                     messages.send(player, "config-changed-name");

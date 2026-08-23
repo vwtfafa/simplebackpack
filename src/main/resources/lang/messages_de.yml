@@ -36,6 +36,7 @@ config-changed-size: "<green>Rucksack-Größe geändert."
 resize-no-space: "<red>Nicht genug Platz in deinem Inventar, um den Rucksack zu verkleinern."
 # GUI-Beschriftungen (werden immer angezeigt, unabhängig von messages-enabled)
 gui-config-title: "<aqua>Rucksack-Einstellungen"
+gui-default-backpack-name: "<aqua>Rucksack"
 gui-admin-list-title: "<aqua>SimpleBackpack Admin"
 gui-admin-view-title: "<aqua>Rucksack: {player}"
 gui-prev-page: "<yellow>< Vorherige Seite"
