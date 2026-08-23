@@ -38,6 +38,10 @@ final class InviteCommand extends SubCommand {
         if (player == null) {
             return;
         }
+        if (target.getUniqueId().equals(player.getUniqueId())) {
+            plugin.messages().send(player, "invite-self");
+            return;
+        }
         UUID owner = plugin.teamRegistry().findOwner(player.getUniqueId());
         if (owner != null && plugin.teamRegistry().membersOf(owner).size() >= plugin.teamMaxSize()) {
             plugin.messages().send(player, "team-full");
