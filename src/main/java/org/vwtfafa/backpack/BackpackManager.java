@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -218,13 +219,53 @@ public class BackpackManager implements Listener {
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(uuid);
         Inventory inv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
         holder.setInventory(inv);
-        if (file.exists()) {
-            YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-            for (int i = 0; i < backpackSize; i++) {
-                inv.setItem(i, config.getItemStack("slot" + i));
+        if (!file.exists()) {
+            return inv;
+        }
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        for (int i = 0; i < backpackSize; i++) {
+            inv.setItem(i, config.getItemStack("slot" + i));
+        }
+        // Recover items stored in slots that no longer exist because the
+        // configured size was reduced; never silently drop them
+        List<ItemStack> overflow = new ArrayList<>();
+        for (int i = backpackSize; i < MAX_BACKPACK_SIZE; i++) {
+            ItemStack item = config.getItemStack("slot" + i);
+            if (item != null && !item.getType().isAir()) {
+                overflow.add(item);
             }
         }
+        if (overflow.isEmpty()) {
+            return inv;
+        }
+        Map<Integer, ItemStack> leftover = inv.addItem(overflow.toArray(new ItemStack[0]));
+        if (!leftover.isEmpty()) {
+            storeOverflow(uuid, leftover.values());
+        }
         return inv;
+    }
+
+    /**
+     * Persists items that no longer fit into a shrunken backpack in a sidecar
+     * file so they can be recovered manually instead of being lost.
+     */
+    private void storeOverflow(UUID owner, Collection<ItemStack> items) {
+        File overflowFile = new File(dataFolder, owner + ".overflow.yml");
+        YamlConfiguration overflowConfig = new YamlConfiguration();
+        int slot = 0;
+        for (ItemStack item : items) {
+            overflowConfig.set("slot" + slot++, item);
+        }
+        try {
+            overflowConfig.save(overflowFile);
+            plugin.getLogger().warning("Backpack " + owner + " shrank below its stored contents; "
+                    + items.size() + " item(s) saved to " + overflowFile.getName());
+            logAudit("OVERFLOW " + owner.toString() + " -> " + overflowFile.getName()
+                    + " (" + items.size() + " items)");
+        } catch (IOException e) {
+            plugin.getLogger().severe("Failed to store overflowing backpack contents of "
+                    + owner + ": " + e.getMessage());
+        }
     }
 
     public void saveBackpack(Player player) {
