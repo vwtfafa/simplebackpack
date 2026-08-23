@@ -118,10 +118,14 @@ public class Backpack extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
         // Drop the quitting player's pending invite so it cannot be accepted later
-        pendingInvites.remove(event.getPlayer().getUniqueId());
+        pendingInvites.remove(player.getUniqueId());
         if (settings.autoSaveOnQuit() && manager != null) {
-            manager.saveBackpackAsync(event.getPlayer());
+            manager.saveBackpackAsync(player);
+        }
+        if (manager != null) {
+            manager.unloadQuitBackpacks(player);
         }
     }
 

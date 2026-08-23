@@ -591,6 +591,32 @@ public class BackpackManager implements Listener {
     }
 
     /**
+     * Removes the quitting player's backpacks from memory so long uptimes
+     * don't accumulate inventories. A backpack stays cached while any other
+     * online player still resolves to it (team or temporary share usage).
+     */
+    void unloadQuitBackpacks(Player quitting) {
+        UUID quitId = quitting.getUniqueId();
+        Set<UUID> candidates = new HashSet<>(Set.of(quitId, resolveEffectiveOwner(quitId)));
+        for (UUID candidate : candidates) {
+            if (!backpacks.containsKey(candidate)) {
+                continue;
+            }
+            boolean used = false;
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                if (!online.equals(quitting)
+                        && resolveEffectiveOwner(online.getUniqueId()).equals(candidate)) {
+                    used = true;
+                    break;
+                }
+            }
+            if (!used) {
+                backpacks.remove(candidate);
+            }
+        }
+    }
+
+    /**
      * Returns whether any online player currently has the owner's live
      * backpack open in an editable view.
      */
