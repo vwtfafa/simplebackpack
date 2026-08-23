@@ -10,6 +10,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -391,18 +392,27 @@ public class BackpackManager implements Listener {
 
     @org.bukkit.event.EventHandler
     /**
-     * Keeps preview views read-only. Editable backpack and admin-edit views
-     * rely on vanilla inventory behavior, including shift-click transfers;
-     * the previous manual transfer duplicated that behavior and risked
-     * item duplication.
+     * Keeps preview views read-only. Clicks inside the player's own inventory
+     * stay untouched so viewers can still organize their items; only actions
+     * that would move items into or out of the previewed inventory are
+     * cancelled. Editable backpack and admin-edit views rely on vanilla
+     * inventory behavior, including shift-click transfers; the previous
+     * manual transfer duplicated that behavior and risked item duplication.
      */
     public void onInventoryClickGlobal(InventoryClickEvent event) {
         if (!(event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)
                 || !holder.isPreview()) {
             return;
         }
+        Inventory top = event.getView().getTopInventory();
+        boolean clickedPreview = top.equals(event.getClickedInventory());
+        boolean transfersWithPreview = event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY
+                || event.getAction() == InventoryAction.COLLECT_TO_CURSOR;
+        if (!clickedPreview && !transfersWithPreview) {
+            return;
+        }
         event.setCancelled(true);
-        if (event.getWhoClicked() instanceof Player viewer) {
+        if (clickedPreview && event.getWhoClicked() instanceof Player viewer) {
             messages.send(viewer, "preview-mode");
         }
     }
