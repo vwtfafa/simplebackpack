@@ -67,7 +67,7 @@ public class Backpack extends JavaPlugin implements Listener {
         manager = new BackpackManager(this, messages, getBackpackName(), getBackpackSize(), teamRegistry, teamEnabled, locale);
         getServer().getPluginManager().registerEvents(this, this);
         registerCommands();
-        if (adminEnabled && adminGuiEnabled) adminGui = new AdminGUI(manager);
+        if (adminEnabled && adminGuiEnabled) adminGui = new AdminGUI(manager, messages);
         // Initialize update checker
         new UpdateChecker(this).checkForUpdates();
     }

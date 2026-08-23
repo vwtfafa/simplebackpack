@@ -61,12 +61,9 @@ public class Messages {
 
     /**
      * Returns the localized message for a key, falling back to English,
-     * or an empty string if messaging is disabled or the key is unknown.
+     * or an empty string if the key is unknown.
      */
     public String get(String key) {
-        if (!isEnabled()) {
-            return "";
-        }
         String message = languageConfig != null ? languageConfig.getString(key) : null;
         if ((message == null || message.isEmpty()) && fallbackConfig != null) {
             message = fallbackConfig.getString(key);
@@ -79,17 +76,40 @@ public class Messages {
     }
 
     /**
+     * Substitutes {placeholder} pairs in a raw message, in order.
+     */
+    private String format(String message, String... replacements) {
+        for (int i = 0; i + 1 < replacements.length; i += 2) {
+            message = message.replace(replacements[i], replacements[i + 1]);
+        }
+        return message;
+    }
+
+    /**
      * Sends a localized message, replacing {placeholder} pairs in order.
      */
     public void send(CommandSender recipient, String key, String... replacements) {
+        if (!isEnabled()) {
+            return;
+        }
         String message = get(key);
         if (message.isEmpty()) {
             return;
         }
-        for (int i = 0; i + 1 < replacements.length; i += 2) {
-            message = message.replace(replacements[i], replacements[i + 1]);
+        recipient.sendMessage(deserialize(format(message, replacements)));
+    }
+
+    /**
+     * Builds a localized component for UI labels such as inventory titles.
+     * Unlike {@link #send}, this ignores the global messages toggle so
+     * interface elements keep working when chat messages are disabled.
+     */
+    public Component component(String key, String... replacements) {
+        String message = get(key);
+        if (message.isEmpty()) {
+            return Component.empty();
         }
-        recipient.sendMessage(deserialize(message));
+        return deserialize(format(message, replacements));
     }
 
     /**

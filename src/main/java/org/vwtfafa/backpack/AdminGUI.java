@@ -25,10 +25,12 @@ public class AdminGUI implements Listener {
     private static final int SLOT_NEXT = 53;
 
     private final BackpackManager manager;
+    private final Messages messages;
     private final NamespacedKey ownerKey;
 
-    public AdminGUI(BackpackManager manager) {
+    public AdminGUI(BackpackManager manager, Messages messages) {
         this.manager = manager;
+        this.messages = messages;
         this.ownerKey = new NamespacedKey(manager.getPlugin(), "backpack_owner");
         Bukkit.getPluginManager().registerEvents(this, manager.getPlugin());
     }
@@ -45,17 +47,20 @@ public class AdminGUI implements Listener {
 
         BackpackInventoryHolder holder = BackpackInventoryHolder.adminList(current);
         Inventory gui = Bukkit.createInventory(holder, 54,
-                Component.text("SimpleBackpack Admin"));
+                messages.component("gui-admin-list-title"));
         holder.setInventory(gui);
         for (int i = current * PAGE_SIZE; i < Math.min(known.size(), (current + 1) * PAGE_SIZE); i++) {
             gui.addItem(createEntryItem(known.get(i)));
         }
         if (current > 0) {
-            gui.setItem(SLOT_PREVIOUS, navItem("< Previous page"));
+            gui.setItem(SLOT_PREVIOUS, navItem(messages.component("gui-prev-page")));
         }
-        gui.setItem(SLOT_INFO, infoItem(known.size(), current + 1, maxPage + 1));
+        gui.setItem(SLOT_INFO, infoItem(messages.component("gui-admin-info",
+                "{total}", String.valueOf(known.size()),
+                "{page}", String.valueOf(current + 1),
+                "{max}", String.valueOf(maxPage + 1))));
         if (current < maxPage) {
-            gui.setItem(SLOT_NEXT, navItem("Next page >"));
+            gui.setItem(SLOT_NEXT, navItem(messages.component("gui-next-page")));
         }
         admin.openInventory(gui);
     }
@@ -67,8 +72,9 @@ public class AdminGUI implements Listener {
         String name = owner.getName() != null ? owner.getName() : "Unknown player";
         meta.displayName(Component.text(name));
         List<Component> lore = new ArrayList<>();
-        lore.add(Component.text("Size: " + manager.getBackpackSizeFor(uuid)));
-        lore.add(Component.text("Left-click: Edit, Right-click: Preview"));
+        lore.add(messages.component("gui-entry-size", "{size}",
+                String.valueOf(manager.getBackpackSizeFor(uuid))));
+        lore.add(messages.component("gui-entry-instructions"));
         meta.lore(lore);
         // Owner is stored in the PDC instead of parsing it from the lore
         meta.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, uuid.toString());
@@ -76,18 +82,18 @@ public class AdminGUI implements Listener {
         return item;
     }
 
-    private ItemStack navItem(String label) {
+    private ItemStack navItem(Component label) {
         ItemStack item = new ItemStack(Material.ARROW);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.text(label));
+        meta.displayName(label);
         item.setItemMeta(meta);
         return item;
     }
 
-    private ItemStack infoItem(int total, int page, int maxPage) {
+    private ItemStack infoItem(Component label) {
         ItemStack item = new ItemStack(Material.BOOK);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.text("Backpacks: " + total + " (page " + page + "/" + maxPage + ")"));
+        meta.displayName(label);
         item.setItemMeta(meta);
         return item;
     }

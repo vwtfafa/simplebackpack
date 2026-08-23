@@ -363,8 +363,9 @@ public class BackpackManager implements Listener {
         // open a new inventory view for admin with same contents
         BackpackInventoryHolder holder = BackpackInventoryHolder.admin(owner, preview);
         String ownerName = Bukkit.getOfflinePlayer(owner).getName();
-        Inventory view = Bukkit.createInventory(holder, inv.getSize(),
-                Component.text("Backpack: " + (ownerName != null ? ownerName : owner.toString())));
+        Component title = messages.component("gui-admin-view-title",
+                "{player}", ownerName != null ? ownerName : owner.toString());
+        Inventory view = Bukkit.createInventory(holder, inv.getSize(), title);
         holder.setInventory(view);
         for (int i = 0; i < inv.getSize(); i++) view.setItem(i, inv.getItem(i));
         admin.openInventory(view);
@@ -402,7 +403,7 @@ public class BackpackManager implements Listener {
 
     public void openConfigGUI(Player player) {
         BackpackInventoryHolder holder = BackpackInventoryHolder.config();
-        Inventory gui = Bukkit.createInventory(holder, 9, Component.text("Backpack Config"));
+        Inventory gui = Bukkit.createInventory(holder, 9, messages.component("gui-config-title"));
         holder.setInventory(gui);
         // Slot 0: Change Name
         ItemStack nameItem = new ItemStack(Material.NAME_TAG);
