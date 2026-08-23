@@ -4,6 +4,7 @@
 open-success: "<aqua>Dein Rucksack ist jetzt geöffnet!"
 no-permission: "<red>Du hast keine Berechtigung für diesen Befehl."
 not-allowed-world: "<red>Du kannst deinen Rucksack in dieser Welt nicht benutzen."
+first-join: "<yellow>Willkommen! Nutze /backpack, um deinen persönlichen Rucksack zu öffnen. Du kannst ihn mit deinem Team teilen und über /backpackconfig konfigurieren."
 creative-not-allowed: "<red>Rucksack ist im Kreativmodus nicht verfügbar."
 reload-success: "<green>Konfiguration erfolgreich neu geladen."
 team-invite: "<green>Du hast {player} in dein Team eingeladen."

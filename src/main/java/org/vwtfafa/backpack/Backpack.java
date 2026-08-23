@@ -3,12 +3,17 @@ package org.vwtfafa.backpack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bstats.bukkit.Metrics;
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -31,6 +36,7 @@ public class Backpack extends JavaPlugin implements Listener {
     private final TeamRegistry teamRegistry = new TeamRegistry();
     private final Map<UUID, TeamInvite> pendingInvites = new HashMap<>();
     private File teamsFile;
+    private NamespacedKey firstJoinKey;
 
     // Configuration-driven state
     private Locale locale = Locale.ENGLISH;
@@ -59,6 +65,7 @@ public class Backpack extends JavaPlugin implements Listener {
     public void onEnable() {
         saveDefaultConfig();
         messages = new Messages(this);
+        firstJoinKey = new NamespacedKey(this, "first-join-message");
         teamsFile = new File(getDataFolder(), "teams.yml");
         loadTeams();
         loadConfigOptions();
@@ -133,6 +140,22 @@ public class Backpack extends JavaPlugin implements Listener {
         messages.reload();
         loadConfigOptions();
         manager.setConfig(getBackpackName(), getBackpackSize(), teamEnabled, locale);
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        if (!getConfig().getBoolean("backpack.first-join-message", true)) {
+            return;
+        }
+        Player player = event.getPlayer();
+        // Greet genuinely new players exactly once; the PDC flag also covers
+        // players who joined before this option existed
+        PersistentDataContainer pdc = player.getPersistentDataContainer();
+        if (player.hasPlayedBefore() || pdc.has(firstJoinKey, PersistentDataType.BYTE)) {
+            return;
+        }
+        pdc.set(firstJoinKey, PersistentDataType.BYTE, (byte) 1);
+        messages.send(player, "first-join");
     }
 
     @EventHandler

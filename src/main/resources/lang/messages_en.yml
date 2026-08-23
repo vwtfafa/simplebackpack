@@ -4,6 +4,7 @@
 open-success: "<aqua>Your backpack is now open!"
 no-permission: "<red>You do not have permission to use this command."
 not-allowed-world: "<red>You cannot use your backpack in this world."
+first-join: "<yellow>Welcome! Use /backpack to open your personal backpack. You can share it with your team and configure it via /backpackconfig."
 creative-not-allowed: "<red>Backpack is not available in Creative mode."
 reload-success: "<green>Config reloaded successfully."
 team-invite: "<green>You have invited {player} to your team."
