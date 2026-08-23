@@ -4,7 +4,6 @@ import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.NamespacedKey;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -21,7 +20,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -33,27 +31,11 @@ public class Backpack extends JavaPlugin implements Listener {
     private BackpackManager manager;
     private AdminGUI adminGui;
     private Messages messages;
+    private PluginSettings settings;
     private final TeamRegistry teamRegistry = new TeamRegistry();
     private final Map<UUID, TeamInvite> pendingInvites = new HashMap<>();
     private File teamsFile;
     private NamespacedKey firstJoinKey;
-
-    // Configuration-driven state
-    private Locale locale = Locale.ENGLISH;
-    private boolean classicMode = false;
-    private boolean teamEnabled = true;
-    private boolean adminEnabled = true;
-    private boolean adminGuiEnabled = true;
-    private boolean showTeamCommands = true;
-    private boolean showAdminCommands = true;
-    private boolean liveConfigReload = true;
-    private boolean keepContentsOnDeath = true;
-    private boolean autoSaveOnQuit = true;
-    private boolean backpacksEnabled = true;
-    private boolean allowInCreative = false;
-    private boolean guiConfigurable = true;
-    private boolean sharingEnabled = true;
-    private int teamMaxSize = 5;
 
     @Override
     public void onDisable() {
@@ -68,13 +50,16 @@ public class Backpack extends JavaPlugin implements Listener {
         firstJoinKey = new NamespacedKey(this, "first-join-message");
         teamsFile = new File(getDataFolder(), "teams.yml");
         loadTeams();
-        loadConfigOptions();
+        settings = PluginSettings.load(this);
         new Metrics(this, BSTATS_PLUGIN_ID);
         getLogger().info("bStats metrics enabled (ID: " + BSTATS_PLUGIN_ID + ")");
-        manager = new BackpackManager(this, messages, getBackpackName(), getBackpackSize(), teamRegistry, teamEnabled, locale);
+        manager = new BackpackManager(this, messages, settings.backpackName(), settings.backpackSize(),
+                teamRegistry, settings.teamEnabled(), settings.locale());
         getServer().getPluginManager().registerEvents(this, this);
         registerCommands();
-        if (adminEnabled && adminGuiEnabled) adminGui = new AdminGUI(manager, messages);
+        if (settings.adminEnabled() && settings.adminGuiEnabled()) {
+            adminGui = new AdminGUI(manager, messages);
+        }
         // Initialize update checker
         new UpdateChecker(this).checkForUpdates();
     }
@@ -90,13 +75,13 @@ public class Backpack extends JavaPlugin implements Listener {
                     "Open the backpack configuration GUI", List.of());
             registrar.register(new BackpackReloadCommand(this).node(),
                     "Reloads the SimpleBackpack config", List.of());
-            if (teamEnabled && showTeamCommands && !classicMode) {
+            if (settings.teamEnabled() && settings.showTeamCommands() && !settings.classicMode()) {
                 registrar.register(new InviteCommand(this).node(), "Invite a player to your team", List.of());
                 registrar.register(new TeamCommand(this).node(), "Show your team members or accept an invite",
                         List.of());
                 registrar.register(new LeaveCommand(this).node(), "Leave your current team", List.of());
             }
-            if (adminEnabled && showAdminCommands) {
+            if (settings.adminEnabled() && settings.showAdminCommands()) {
                 registrar.register(new BackpackAdminCommand(this).node(),
                         "Admin commands for SimpleBackpack", List.of());
             }
@@ -105,31 +90,7 @@ public class Backpack extends JavaPlugin implements Listener {
     }
 
     private void loadConfigOptions() {
-        FileConfiguration config = getConfig();
-        String lang = config.getString("language", "en");
-        if (lang.equalsIgnoreCase("de")) locale = Locale.GERMAN;
-        classicMode = config.getBoolean("classic-mode", false);
-        teamEnabled = config.getBoolean("team.enabled", true);
-        adminEnabled = config.getBoolean("admin.enabled", true);
-        adminGuiEnabled = config.getBoolean("admin.enable-gui", true);
-        showTeamCommands = config.getBoolean("show-team-commands", true);
-        showAdminCommands = config.getBoolean("show-admin-commands", true);
-        liveConfigReload = config.getBoolean("live-config-reload", true);
-        keepContentsOnDeath = config.getBoolean("backpack.keep-on-death", true);
-        autoSaveOnQuit = config.getBoolean("backpack.auto-save-on-quit", true);
-        backpacksEnabled = config.getBoolean("backpacks-enabled", true);
-        allowInCreative = config.getBoolean("backpack.allow-in-creative", false);
-        guiConfigurable = config.getBoolean("backpack.gui-configurable", true);
-        sharingEnabled = config.getBoolean("enable-sharing", true);
-        teamMaxSize = Math.max(2, config.getInt("team.max-size", 5));
-    }
-
-    private String getBackpackName() {
-        return getConfig().getString("backpack.name", "<aqua>Simple Backpack");
-    }
-
-    private int getBackpackSize() {
-        return getConfig().getInt("backpack.size", 27);
+        settings = PluginSettings.load(this);
     }
 
     /**
@@ -139,7 +100,8 @@ public class Backpack extends JavaPlugin implements Listener {
         reloadConfig();
         messages.reload();
         loadConfigOptions();
-        manager.setConfig(getBackpackName(), getBackpackSize(), teamEnabled, locale);
+        manager.setConfig(settings.backpackName(), settings.backpackSize(),
+                settings.teamEnabled(), settings.locale());
     }
 
     @EventHandler
@@ -162,14 +124,14 @@ public class Backpack extends JavaPlugin implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         // Drop the quitting player's pending invite so it cannot be accepted later
         pendingInvites.remove(event.getPlayer().getUniqueId());
-        if (autoSaveOnQuit && manager != null) {
+        if (settings.autoSaveOnQuit() && manager != null) {
             manager.saveBackpackAsync(event.getPlayer());
         }
     }
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        if (!keepContentsOnDeath && manager != null) {
+        if (!settings.keepContentsOnDeath() && manager != null) {
             manager.clearBackpack(event.getEntity());
         }
     }
@@ -195,40 +157,40 @@ public class Backpack extends JavaPlugin implements Listener {
     }
 
     int teamMaxSize() {
-        return teamMaxSize;
+        return settings.teamMaxSize();
     }
 
     boolean backpacksEnabled() {
-        return backpacksEnabled;
+        return settings.backpacksEnabled();
     }
 
     /**
      * Flips the global enable flag live and persists it to the config.
      */
     void setBackpacksEnabled(boolean enabled) {
-        backpacksEnabled = enabled;
+        settings.setBackpacksEnabled(enabled);
         getConfig().set("backpacks-enabled", enabled);
         saveConfig();
     }
 
     boolean allowInCreative() {
-        return allowInCreative;
+        return settings.allowInCreative();
     }
 
     List<String> disabledWorlds() {
-        return getConfig().getStringList("backpack.disabled-worlds");
+        return settings.disabledWorlds();
     }
 
     boolean guiConfigurable() {
-        return guiConfigurable;
+        return settings.guiConfigurable();
     }
 
     boolean sharingEnabled() {
-        return sharingEnabled;
+        return settings.sharingEnabled();
     }
 
     boolean liveConfigReload() {
-        return liveConfigReload;
+        return settings.liveConfigReload();
     }
 
     void saveTeams() {
