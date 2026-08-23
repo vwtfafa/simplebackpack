@@ -63,7 +63,7 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 - `messages-enabled` - Enable/disable player messages
 
 ### Backpack Settings
-- `backpack.name` - Inventory name (supports color codes)
+- `backpack.name` - Inventory title (MiniMessage like `<aqua>`, or legacy `§` codes)
 - `backpack.size` - Backpack size (9, 18, 27, 36, 45, or 54)
 - `backpack.allow-in-creative` - Allow backpack use in creative mode
 - `backpack.auto-save-on-quit` - Auto-save when player disconnects
@@ -86,11 +86,22 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 - `enable-sharing` - Enable `/backpackshare` command
 
 ### Update Checker
-- `update-checker.notify-chat` - Master switch for chat notifications about updates
+- `update-checker.enabled` - Master switch; if `false`, no update check runs at all
+- `update-checker.notify-chat` - Send chat notifications about updates
 - `update-checker.notify-ops` - Include operators (without the admin permission) among the recipients
 
 ### Messaging
-Messages are organized by language (`en`/`de`) under `messages.<lang>.<key>`.
+Translations live in separate files that are extracted on first start:
+
+```
+plugins/SimpleBackpack/lang/messages_en.yml
+plugins/SimpleBackpack/lang/messages_de.yml
+```
+
+- Values support MiniMessage tags (`<aqua>`, `<bold>`, ...) and legacy `§` color codes
+- Missing keys fall back to English automatically
+- Custom languages: add e.g. `messages_fr.yml` and set `language: fr`
+- `/backpackreload` reloads translations live
 
 ## Development
 
