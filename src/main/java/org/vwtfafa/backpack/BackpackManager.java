@@ -50,7 +50,6 @@ public class BackpackManager implements Listener {
     private volatile String backpackName;
     private volatile int backpackSize;
     private Locale locale;
-    private FileConfiguration configCache;
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
     private final File auditLogFile;
     // Guards all inventory file writes: prevents interleaved temp-file writes
@@ -71,7 +70,6 @@ public class BackpackManager implements Listener {
             if (!this.auditLogFile.exists()) this.auditLogFile.createNewFile();
         } catch (Exception ignored) {}
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
-        this.configCache = plugin.getConfig();
         this.backpackSize = validateBackpackSize(backpackSize);
     }
 
@@ -390,7 +388,6 @@ public class BackpackManager implements Listener {
         this.backpackSize = backpackSize;
         this.teamEnabled = teamEnabled;
         this.locale = locale;
-        this.configCache = plugin.getConfig();
     }
 
     public void openConfigGUI(Player player) {
@@ -521,10 +518,7 @@ public class BackpackManager implements Listener {
                     stored.setItem(i, top.getItem(i));
                 }
                 // optionally create a snapshot before saving (config: admin.auto-snapshot)
-                boolean doSnapshot = true;
-                try {
-                    if (configCache != null) doSnapshot = configCache.getBoolean("admin.auto-snapshot", true);
-                } catch (Exception ignored) {}
+                boolean doSnapshot = plugin.getConfig().getBoolean("admin.auto-snapshot", true);
                 if (doSnapshot) {
                     try {
                         File snapshotsDir = new File(plugin.getDataFolder(), "backups/snapshots");
