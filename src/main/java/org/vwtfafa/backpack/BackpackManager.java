@@ -57,6 +57,10 @@ public class BackpackManager implements Listener {
     private volatile int backpackSize;
     private Locale locale;
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
+    // Owners whose backpack an inventory-close event just persisted; lets the
+    // quit-time autosave skip the redundant second write on disconnects
+    private final Map<UUID, Long> recentSaveOwners = new ConcurrentHashMap<>();
+    private static final long RECENT_SAVE_WINDOW_MILLIS = 2000L;
     private final File auditLogFile;
     // Guards all inventory file writes: prevents interleaved temp-file writes
     // without keeping an ever-growing per-owner lock map
@@ -276,9 +280,15 @@ public class BackpackManager implements Listener {
      * Saves a player's backpack without blocking the caller: the contents
      * are snapshotted synchronously and written on an async task. Used for
      * quit-time autosave so disconnects never cause main-thread disk I/O.
+     * Skipped when the inventory-close save triggered by this very
+     * disconnect just persisted the same backpack.
      */
     public void saveBackpackAsync(Player player) {
         UUID owner = resolveEffectiveOwner(player.getUniqueId());
+        Long lastSave = recentSaveOwners.remove(owner);
+        if (lastSave != null && System.currentTimeMillis() - lastSave <= RECENT_SAVE_WINDOW_MILLIS) {
+            return;
+        }
         Inventory inv = getBackpack(player);
         saveInventoryAsync(owner, snapshot(inv), "quit");
     }
@@ -546,7 +556,9 @@ public class BackpackManager implements Listener {
         }
         // If this was a normal backpack view, save owner's backpack on close
         if (holder.getType() == BackpackInventoryHolder.Type.BACKPACK) {
-            saveInventoryAsync(holder.getOwner(), snapshot(event.getInventory()), "close");
+            UUID owner = holder.getOwner();
+            recentSaveOwners.put(owner, System.currentTimeMillis());
+            saveInventoryAsync(owner, snapshot(event.getInventory()), "close");
         }
     }
 
