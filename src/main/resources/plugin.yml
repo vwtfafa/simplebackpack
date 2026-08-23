@@ -25,7 +25,6 @@ permissions:
     description: Allows using admin commands
     default: op
 authors: ["vwtfafa"]
-softdepend: [Vault]
 
 description: >
   SimpleBackpack — persistent, configurable player backpacks with a clean vanilla-style GUI.
