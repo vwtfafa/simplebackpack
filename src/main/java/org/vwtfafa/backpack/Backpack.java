@@ -78,23 +78,22 @@ public class Backpack extends JavaPlugin implements Listener {
     private void registerCommands() {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             Commands registrar = event.registrar();
-            registrar.register("backpack", "Opens your personal backpack", List.of("bp"), new BackpackCommand(this));
-            registrar.register("backpackconfig", "Open the backpack configuration GUI", List.of(),
-                    new BackpackConfigCommand(this));
-            registrar.register("backpackreload", "Reloads the SimpleBackpack config", List.of(),
-                    new BackpackReloadCommand(this));
+            registrar.register(new BackpackCommand(this).node(), "Opens your personal backpack", List.of("bp"));
+            registrar.register(new BackpackConfigCommand(this).node(),
+                    "Open the backpack configuration GUI", List.of());
+            registrar.register(new BackpackReloadCommand(this).node(),
+                    "Reloads the SimpleBackpack config", List.of());
             if (teamEnabled && showTeamCommands && !classicMode) {
-                registrar.register("invite", "Invite a player to your team", List.of(), new InviteCommand(this));
-                registrar.register("team", "Show your team members or accept an invite", List.of(),
-                        new TeamCommand(this));
-                registrar.register("leave", "Leave your current team", List.of(), new LeaveCommand(this));
+                registrar.register(new InviteCommand(this).node(), "Invite a player to your team", List.of());
+                registrar.register(new TeamCommand(this).node(), "Show your team members or accept an invite",
+                        List.of());
+                registrar.register(new LeaveCommand(this).node(), "Leave your current team", List.of());
             }
             if (adminEnabled && showAdminCommands) {
-                registrar.register("backpackadmin", "Admin commands for SimpleBackpack", List.of(),
-                        new BackpackAdminCommand(this));
+                registrar.register(new BackpackAdminCommand(this).node(),
+                        "Admin commands for SimpleBackpack", List.of());
             }
-            registrar.register("backpackshare", "Temporarily share your backpack", List.of(),
-                    new BackpackShareCommand(this));
+            registrar.register(new BackpackShareCommand(this).node(), "Temporarily share your backpack", List.of());
         });
     }
 

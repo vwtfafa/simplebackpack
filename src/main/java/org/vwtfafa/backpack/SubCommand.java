@@ -1,15 +1,16 @@
 package org.vwtfafa.backpack;
 
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 /**
- * Base class for SimpleBackpack Brigadier commands. Root visibility is
- * controlled by {@link #permission()} and execution helpers provide
- * localized feedback.
+ * Base class for SimpleBackpack Brigadier commands. Each subclass builds a
+ * full command tree whose visibility and execution are gated by
+ * {@link #permission()}.
  */
-abstract class SubCommand implements io.papermc.paper.command.brigadier.BasicCommand {
+abstract class SubCommand {
     protected final Backpack plugin;
 
     protected SubCommand(Backpack plugin) {
@@ -28,4 +29,14 @@ abstract class SubCommand implements io.papermc.paper.command.brigadier.BasicCom
         plugin.messages().send(sender, "no-permission");
         return null;
     }
+
+    /**
+     * Permission that controls both tree visibility and execution.
+     */
+    abstract String permission();
+
+    /**
+     * Builds the complete Brigadier command tree for registration.
+     */
+    abstract LiteralCommandNode<CommandSourceStack> node();
 }

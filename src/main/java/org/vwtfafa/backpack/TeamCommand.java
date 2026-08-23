@@ -1,14 +1,14 @@
 package org.vwtfafa.backpack;
 
+import com.mojang.brigadier.Command;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.Commands;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
 import java.util.HashSet;
-import java.util.Collection;
-import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -22,16 +22,25 @@ final class TeamCommand extends SubCommand {
     }
 
     @Override
-    public void execute(CommandSourceStack source, String[] args) {
-        Player player = requirePlayer(source);
-        if (player == null) {
-            return;
-        }
-        if (args.length > 0 && args[0].equalsIgnoreCase("accept")) {
-            acceptInvite(player);
-            return;
-        }
-        showTeamInfo(player);
+    LiteralCommandNode<CommandSourceStack> node() {
+        return Commands.literal("team")
+                .requires(source -> source.getSender().hasPermission(permission()))
+                .executes(ctx -> {
+                    Player player = requirePlayer(ctx.getSource());
+                    if (player != null) {
+                        showTeamInfo(player);
+                    }
+                    return Command.SINGLE_SUCCESS;
+                })
+                .then(Commands.literal("accept")
+                        .executes(ctx -> {
+                            Player player = requirePlayer(ctx.getSource());
+                            if (player != null) {
+                                acceptInvite(player);
+                            }
+                            return Command.SINGLE_SUCCESS;
+                        }))
+                .build();
     }
 
     private void acceptInvite(Player player) {
@@ -97,15 +106,7 @@ final class TeamCommand extends SubCommand {
     }
 
     @Override
-    public Collection<String> suggest(CommandSourceStack source, String[] args) {
-        if (args.length == 1 && "accept".startsWith(args[0].toLowerCase(Locale.ROOT))) {
-            return List.of("accept");
-        }
-        return List.of();
-    }
-
-    @Override
-    public String permission() {
+    String permission() {
         return "simplebackpack.team";
     }
 }

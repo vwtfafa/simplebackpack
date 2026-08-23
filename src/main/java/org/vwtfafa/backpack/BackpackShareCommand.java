@@ -1,12 +1,13 @@
 package org.vwtfafa.backpack;
 
+import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
-import org.bukkit.Bukkit;
+import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
+import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
 import org.bukkit.entity.Player;
-
-import java.util.Collection;
-import java.util.List;
-import java.util.Locale;
 
 /**
  * /backpackshare <player> [durationMinutes] - grants temporary access to
@@ -22,7 +23,29 @@ final class BackpackShareCommand extends SubCommand {
     }
 
     @Override
-    public void execute(CommandSourceStack source, String[] args) {
+    LiteralCommandNode<CommandSourceStack> node() {
+        return Commands.literal("backpackshare")
+                .requires(source -> source.getSender().hasPermission(permission()))
+                .then(Commands.argument("player", ArgumentTypes.player())
+                        .executes(ctx -> {
+                            Player target = ctx.getArgument("player", PlayerSelectorArgumentResolver.class)
+                                    .resolve(ctx.getSource()).getFirst();
+                            execute(ctx.getSource(), target, DEFAULT_DURATION_MINUTES);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.argument("minutes",
+                                        IntegerArgumentType.integer(1, (int) MAX_DURATION_MINUTES))
+                                .executes(ctx -> {
+                                    Player target = ctx.getArgument("player", PlayerSelectorArgumentResolver.class)
+                                            .resolve(ctx.getSource()).getFirst();
+                                    int minutes = IntegerArgumentType.getInteger(ctx, "minutes");
+                                    execute(ctx.getSource(), target, minutes);
+                                    return Command.SINGLE_SUCCESS;
+                                })))
+                .build();
+    }
+
+    private void execute(CommandSourceStack source, Player target, long durationMinutes) {
         Player player = requirePlayer(source);
         if (player == null) {
             return;
@@ -31,28 +54,6 @@ final class BackpackShareCommand extends SubCommand {
             plugin.messages().send(player, "no-permission");
             return;
         }
-        if (args.length < 1) {
-            plugin.messages().send(player, "share-usage");
-            return;
-        }
-        Player target = Bukkit.getPlayer(args[0]);
-        if (target == null) {
-            plugin.messages().send(player, "share-player-offline");
-            return;
-        }
-        long durationMinutes = DEFAULT_DURATION_MINUTES;
-        if (args.length >= 2) {
-            try {
-                durationMinutes = Long.parseLong(args[1]);
-            } catch (NumberFormatException ignored) {
-                plugin.messages().send(player, "share-usage");
-                return;
-            }
-            if (durationMinutes <= 0 || durationMinutes > MAX_DURATION_MINUTES) {
-                plugin.messages().send(player, "share-usage");
-                return;
-            }
-        }
         plugin.manager().shareBackpack(player.getUniqueId(), target.getUniqueId(),
                 durationMinutes * MILLIS_PER_MINUTE);
         plugin.messages().send(player, "share-success", "{player}", target.getName());
@@ -60,18 +61,7 @@ final class BackpackShareCommand extends SubCommand {
     }
 
     @Override
-    public Collection<String> suggest(CommandSourceStack source, String[] args) {
-        if (args.length == 1) {
-            return Bukkit.getOnlinePlayers().stream()
-                    .map(Player::getName)
-                    .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(args[0].toLowerCase(Locale.ROOT)))
-                    .toList();
-        }
-        return List.of();
-    }
-
-    @Override
-    public String permission() {
+    String permission() {
         return "simplebackpack.use";
     }
 }

@@ -1,6 +1,9 @@
 package org.vwtfafa.backpack;
 
+import com.mojang.brigadier.Command;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.Commands;
 import org.bukkit.entity.Player;
 
 /**
@@ -13,7 +16,17 @@ final class LeaveCommand extends SubCommand {
     }
 
     @Override
-    public void execute(CommandSourceStack source, String[] args) {
+    LiteralCommandNode<CommandSourceStack> node() {
+        return Commands.literal("leave")
+                .requires(source -> source.getSender().hasPermission(permission()))
+                .executes(ctx -> {
+                    execute(ctx.getSource());
+                    return Command.SINGLE_SUCCESS;
+                })
+                .build();
+    }
+
+    private void execute(CommandSourceStack source) {
         Player player = requirePlayer(source);
         if (player == null) {
             return;
@@ -28,7 +41,7 @@ final class LeaveCommand extends SubCommand {
     }
 
     @Override
-    public String permission() {
+    String permission() {
         return "simplebackpack.team.leave";
     }
 }

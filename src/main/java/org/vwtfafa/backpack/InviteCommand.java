@@ -1,12 +1,13 @@
 package org.vwtfafa.backpack;
 
+import com.mojang.brigadier.Command;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
-import org.bukkit.Bukkit;
+import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
+import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
 import org.bukkit.entity.Player;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -19,18 +20,22 @@ final class InviteCommand extends SubCommand {
     }
 
     @Override
-    public void execute(CommandSourceStack source, String[] args) {
+    LiteralCommandNode<CommandSourceStack> node() {
+        return Commands.literal("invite")
+                .requires(source -> source.getSender().hasPermission(permission()))
+                .then(Commands.argument("player", ArgumentTypes.player())
+                        .executes(ctx -> {
+                            Player target = ctx.getArgument("player", PlayerSelectorArgumentResolver.class)
+                                    .resolve(ctx.getSource()).getFirst();
+                            execute(ctx.getSource(), target);
+                            return Command.SINGLE_SUCCESS;
+                        }))
+                .build();
+    }
+
+    private void execute(CommandSourceStack source, Player target) {
         Player player = requirePlayer(source);
         if (player == null) {
-            return;
-        }
-        if (args.length < 1) {
-            plugin.messages().send(player, "invite-usage");
-            return;
-        }
-        Player target = Bukkit.getPlayer(args[0]);
-        if (target == null) {
-            plugin.messages().send(player, "share-player-offline");
             return;
         }
         UUID owner = plugin.teamRegistry().findOwner(player.getUniqueId());
@@ -45,25 +50,12 @@ final class InviteCommand extends SubCommand {
         plugin.pendingInvites().values().removeIf(TeamInvite::isExpired);
         plugin.pendingInvites().put(target.getUniqueId(),
                 new TeamInvite(player.getUniqueId(), System.currentTimeMillis() + Backpack.INVITE_EXPIRY_MILLIS));
-        String targetName = target.getName() != null ? target.getName() : target.getUniqueId().toString();
-        String playerName = player.getName() != null ? player.getName() : player.getUniqueId().toString();
-        plugin.messages().send(player, "team-invite", "{player}", targetName);
-        plugin.messages().send(target, "team-invite-recv", "{player}", playerName);
+        plugin.messages().send(player, "team-invite", "{player}", target.getName());
+        plugin.messages().send(target, "team-invite-recv", "{player}", player.getName());
     }
 
     @Override
-    public Collection<String> suggest(CommandSourceStack source, String[] args) {
-        if (args.length == 1) {
-            return Bukkit.getOnlinePlayers().stream()
-                    .map(Player::getName)
-                    .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(args[0].toLowerCase(Locale.ROOT)))
-                    .toList();
-        }
-        return List.of();
-    }
-
-    @Override
-    public String permission() {
+    String permission() {
         return "simplebackpack.team.invite";
     }
 }
