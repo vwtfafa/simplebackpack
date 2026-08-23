@@ -40,7 +40,7 @@ public class UpdateChecker {
      * Loads the latest version from GitHub asynchronously and notifies operators
      */
     public void checkForUpdates() {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        Bukkit.getAsyncScheduler().runNow(plugin, task -> {
             try {
                 HttpClient client = HttpClient.newBuilder()
                         .connectTimeout(Duration.ofSeconds(5))
@@ -99,7 +99,7 @@ public class UpdateChecker {
         if (!notifyChat) {
             return;
         }
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
             Component message = Component.text(
                             "[SimpleBackpack] Update available: " + latestVersion + " - Open release page")
                     .color(NamedTextColor.GOLD)

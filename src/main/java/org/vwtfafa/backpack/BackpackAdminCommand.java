@@ -42,12 +42,12 @@ final class BackpackAdminCommand extends SubCommand {
             plugin.messages().send(player, "admin-gui-disabled");
             return;
         }
-        // Open on the next tick for a clean inventory state
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        // Open on the next tick of the player's region for a clean inventory state
+        player.getScheduler().run(plugin, task -> {
             if (plugin.adminGui() != null) {
                 plugin.adminGui().openAdminGUI(player);
             }
-        });
+        }, null);
     }
 
     @Override

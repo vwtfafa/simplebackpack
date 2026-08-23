@@ -296,9 +296,9 @@ public class BackpackManager implements Listener {
         String timestamped = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now())
                 + " - " + line;
         // File I/O must not block the main thread; while the plugin is
-        // disabling, scheduled async tasks are never run, so write directly
+        // disabling, scheduled tasks are never run, so write directly
         if (plugin.isEnabled()) {
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> writeAuditLine(timestamped));
+            plugin.getServer().getAsyncScheduler().runNow(plugin, task -> writeAuditLine(timestamped));
         } else {
             writeAuditLine(timestamped);
         }
@@ -553,16 +553,16 @@ public class BackpackManager implements Listener {
     }
 
     private void saveInventoryAsync(UUID owner, ItemStack[] contents, String source) {
-        new org.bukkit.scheduler.BukkitRunnable() {
-            @Override
-            public void run() {
-                try {
-                    writeInventory(owner, contents, source);
-                } catch (RuntimeException e) {
-                    plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to save backpack " + owner + " from " + source, e);
-                }
+        // The contents were snapshotted synchronously by the caller, so the
+        // async write never races inventory mutations
+        plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
+            try {
+                writeInventory(owner, contents, source);
+            } catch (RuntimeException e) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                        "Failed to save backpack " + owner + " from " + source, e);
             }
-        }.runTaskAsynchronously(plugin);
+        });
     }
 
     private void writeInventory(UUID owner, ItemStack[] contents, String source) {
