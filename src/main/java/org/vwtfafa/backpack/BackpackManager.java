@@ -348,8 +348,13 @@ public class BackpackManager implements Listener {
     public void onInventoryClick(InventoryClickEvent event) {
         if (event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder
             && holder.getType() == BackpackInventoryHolder.Type.CONFIG) {
+            // Cancel everything in this view so no items can be shifted into the
+            // config GUI, but only react to clicks on the GUI itself
             event.setCancelled(true);
-            Player player = (Player) event.getWhoClicked();
+            if (!event.getView().getTopInventory().equals(event.getClickedInventory())
+                    || !(event.getWhoClicked() instanceof Player player)) {
+                return;
+            }
             switch (event.getSlot()) {
                 case 0:
                     // Name ändern (Dialog oder Standard)
