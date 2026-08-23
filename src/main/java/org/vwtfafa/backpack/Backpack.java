@@ -4,7 +4,6 @@ import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.NamespacedKey;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -16,12 +15,9 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 public class Backpack extends JavaPlugin implements Listener {
@@ -34,7 +30,7 @@ public class Backpack extends JavaPlugin implements Listener {
     private PluginSettings settings;
     private final TeamRegistry teamRegistry = new TeamRegistry();
     private final Map<UUID, TeamInvite> pendingInvites = new HashMap<>();
-    private File teamsFile;
+    private TeamStorage teamStorage;
     private NamespacedKey firstJoinKey;
 
     @Override
@@ -48,8 +44,8 @@ public class Backpack extends JavaPlugin implements Listener {
         saveDefaultConfig();
         messages = new Messages(this);
         firstJoinKey = new NamespacedKey(this, "first-join-message");
-        teamsFile = new File(getDataFolder(), "teams.yml");
-        loadTeams();
+        teamStorage = new TeamStorage(new File(getDataFolder(), "teams.yml"), getLogger());
+        teamStorage.load(teamRegistry);
         settings = PluginSettings.load(this);
         new Metrics(this, BSTATS_PLUGIN_ID);
         getLogger().info("bStats metrics enabled (ID: " + BSTATS_PLUGIN_ID + ")");
@@ -194,38 +190,6 @@ public class Backpack extends JavaPlugin implements Listener {
     }
 
     void saveTeams() {
-        if (teamsFile == null) return;
-        YamlConfiguration config = new YamlConfiguration();
-        List<String> owners = new java.util.ArrayList<>();
-        for (Map.Entry<UUID, Set<UUID>> entry : teamRegistry.entries()) {
-            owners.add(entry.getKey().toString());
-            List<String> members = new java.util.ArrayList<>();
-            for (UUID member : entry.getValue()) members.add(member.toString());
-            config.set("teams." + entry.getKey(), members);
-        }
-        config.set("teams.owners", owners);
-        try {
-            config.save(teamsFile);
-        } catch (IOException e) {
-            getLogger().log(java.util.logging.Level.SEVERE, "Failed to save teams", e);
-        }
-    }
-
-    private void loadTeams() {
-        teamRegistry.clear();
-        if (teamsFile == null || !teamsFile.exists()) return;
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(teamsFile);
-        for (String ownerKey : config.getStringList("teams.owners")) {
-            try {
-                UUID owner = UUID.fromString(ownerKey);
-                Set<UUID> members = new HashSet<>();
-                for (String memberKey : config.getStringList("teams." + ownerKey)) {
-                    members.add(UUID.fromString(memberKey));
-                }
-                teamRegistry.createTeam(owner, members);
-            } catch (IllegalArgumentException ignored) {
-                getLogger().warning("Ignoring invalid team entry: " + ownerKey);
-            }
-        }
+        teamStorage.save(teamRegistry);
     }
 }
