@@ -517,6 +517,14 @@ public class BackpackManager implements Listener {
         // If admin was editing a "Backpack: <uuid>" view, persist changes
         if (holder.getType() == BackpackInventoryHolder.Type.ADMIN) {
                 UUID owner = holder.getOwner();
+                // Never overwrite concurrent edits made by the owner or a team
+                // member viewing the live backpack right now; their version wins
+                if (isBackpackViewed(owner)) {
+                    messages.send(viewer, "admin-edit-conflict");
+                    logAudit("ADMIN_CONFLICT " + viewer.getName() + " -> " + owner.toString()
+                            + " (live view open, changes discarded)");
+                    return;
+                }
                 Inventory top = event.getInventory();
                 // apply contents back to owner's stored backpack
                 Inventory stored = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
@@ -556,6 +564,21 @@ public class BackpackManager implements Listener {
             copy[i] = contents[i] == null ? null : contents[i].clone();
         }
         return copy;
+    }
+
+    /**
+     * Returns whether any online player currently has the owner's live
+     * backpack open in an editable view.
+     */
+    private boolean isBackpackViewed(UUID owner) {
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (online.getOpenInventory().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder
+                    && holder.getType() == BackpackInventoryHolder.Type.BACKPACK
+                    && owner.equals(holder.getOwner())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void saveInventoryAsync(UUID owner, ItemStack[] contents, String source) {
