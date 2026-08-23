@@ -36,7 +36,10 @@ changing them requires a server restart.
 | `/team` | Show your team members | `simplebackpack.team` |
 | `/team accept` | Accept a team invitation | `simplebackpack.team` |
 | `/leave` | Leave your current team | `simplebackpack.team.leave` |
+| `/backpackadmin` | Show admin command overview | `simplebackpack.admin` |
 | `/backpackadmin gui` | Open admin overview GUI | `simplebackpack.admin` |
+| `/backpackadmin clear <player>` | Wipe a player's backpack | `simplebackpack.admin` |
+| `/backpackadmin enable` / `disable` | Toggle backpacks globally (persisted) | `simplebackpack.admin` |
 | `/backpackshare <player> [minutes]` | Temporarily share your backpack | `simplebackpack.use` |
 
 ## Permissions
@@ -69,6 +72,9 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 - `backpack.auto-save-on-quit` - Auto-save when player disconnects
 - `backpack.keep-on-death` - Keep contents on death
 - `backpack.gui-configurable` - Allow in-game configuration
+- `backpack.open-sound` - Play a sound when opening the backpack
+- `backpack.first-join-message` - One-time welcome message for new players
+- `backpack.disabled-worlds` - World names where `/backpack` cannot be used, e.g. `[example_world]`
 
 ### Team Settings
 - `team.enabled` - Enable team functionality
