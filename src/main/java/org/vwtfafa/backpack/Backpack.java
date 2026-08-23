@@ -118,7 +118,7 @@ public class Backpack extends JavaPlugin implements Listener {
     }
 
     private String getBackpackName() {
-        return getConfig().getString("backpack.name", "§bSimple Backpack");
+        return getConfig().getString("backpack.name", "<aqua>Simple Backpack");
     }
 
     private int getBackpackSize() {
