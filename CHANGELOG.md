@@ -1,5 +1,29 @@
 # Changelog
 
+## 7.0.1 - 2026-08-23
+
+### Fixed
+- `/team accept` no longer loses the accepting player: when the inviter had no team yet, the created team previously contained only the inviter while the accepting player stayed teamless.
+- Team size limit (`team.max-size`) is now re-checked when an invite is accepted; accepting after the team filled up no longer exceeds the cap and reports `team-full` instead.
+- Fixed a race where a quick reconnect after quitting could serve stale backpack data: the cached inventory was evicted while its quit-time save write was still in flight. Cache eviction is now chained onto write completion, and the recent-save deduplication marker is only recorded after the inventory-close save actually finished.
+- Console and other non-player senders running player-only commands now receive the dedicated `players-only` message instead of being told they lack permission.
+
+### Changed
+- The config GUI "Change Name" reset uses the new `gui-default-backpack-name` lang key instead of hardcoded German/English defaults.
+- Known-backpack listing explicitly excludes `*.overflow.yml` sidecar files instead of relying on UUID parsing to reject them.
+
+### Internals
+- `BackpackManager` fields `plugin`, `dataFolder` and `teamRegistry` are final; a failure to create the backpacks data folder is logged as a warning.
+- Removed dead locale plumbing (unused `Locale` field/parameter in `BackpackManager`, unused `locale()` accessor in `PluginSettings`).
+- Removed the unused `mockito-core` test dependency and the unused `share-usage` / `invite-usage` lang keys.
+- `UpdateChecker.isNewerVersion` is package-private static; its test now exercises the real method instead of a duplicated copy of the logic. Added cases for `v` prefixes and unparseable versions.
+- plugin.yml description no longer mentions the non-existent "admin insert" feature.
+- New message key: `players-only` (en/de).
+
+### Verification
+- `./gradlew build` passes: compilation, JUnit tests, Checkstyle and SpotBugs.
+- Command API usage verified against the Paper 26.2 Javadocs (`ArgumentTypes.player()`, Brigadier lifecycle registration, Folia-style schedulers).
+
 ## 7.0 - 2026-08-22
 
 ### Changed (Breaking)
