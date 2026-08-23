@@ -23,7 +23,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.2.build.112-stable")
+    compileOnly("io.papermc.paper:paper-api:26.2.build.116-stable")
     compileOnly("com.google.code.gson:gson:2.11.0")
 
     implementation("org.bstats:bstats-bukkit:3.2.1")
@@ -31,7 +31,7 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.0'
     testImplementation 'org.mockito:mockito-core:5.0.0'
-    testImplementation 'io.papermc.paper:paper-api:26.2.build.112-stable'
+    testImplementation 'io.papermc.paper:paper-api:26.2.build.116-stable'
 }
 
 tasks {
