@@ -272,13 +272,6 @@ public class BackpackManager implements Listener {
         }
     }
 
-    public void saveBackpack(Player player) {
-        // Resolve the effective owner to save to the correct file
-        UUID owner = resolveEffectiveOwner(player.getUniqueId());
-        Inventory inv = getBackpack(player);
-        writeInventory(owner, snapshot(inv), "player " + player.getName());
-    }
-
     /**
      * Saves a player's backpack without blocking the caller: the contents
      * are snapshotted synchronously and written on an async task. Used for
@@ -378,15 +371,15 @@ public class BackpackManager implements Listener {
     public void clearBackpack(Player player) {
         // Only wipe backpacks the dying player owns themselves; one member
         // must not empty a shared team or temporarily shared backpack
-        UUID playerId = player.getUniqueId();
-        if (!playerId.equals(resolveEffectiveOwner(playerId))) {
+        UUID ownerId = player.getUniqueId();
+        if (!ownerId.equals(resolveEffectiveOwner(ownerId))) {
             return;
         }
         Inventory inv = getBackpack(player);
         for (int i = 0; i < inv.getSize(); i++) {
             inv.setItem(i, null);
         }
-        saveBackpack(player);
+        saveInventoryAsync(ownerId, snapshot(inv), "death");
     }
 
     public void setConfig(String backpackName, int backpackSize, boolean teamEnabled, Locale locale) {
