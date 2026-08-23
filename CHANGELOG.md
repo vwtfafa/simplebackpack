@@ -1,29 +1,5 @@
 # Changelog
 
-## 7.0.1 - 2026-08-23
-
-### Fixed
-- `/team accept` no longer loses the accepting player: when the inviter had no team yet, the created team previously contained only the inviter while the accepting player stayed teamless.
-- Team size limit (`team.max-size`) is now re-checked when an invite is accepted; accepting after the team filled up no longer exceeds the cap and reports `team-full` instead.
-- Fixed a race where a quick reconnect after quitting could serve stale backpack data: the cached inventory was evicted while its quit-time save write was still in flight. Cache eviction is now chained onto write completion, and the recent-save deduplication marker is only recorded after the inventory-close save actually finished.
-- Console and other non-player senders running player-only commands now receive the dedicated `players-only` message instead of being told they lack permission.
-
-### Changed
-- The config GUI "Change Name" reset uses the new `gui-default-backpack-name` lang key instead of hardcoded German/English defaults.
-- Known-backpack listing explicitly excludes `*.overflow.yml` sidecar files instead of relying on UUID parsing to reject them.
-
-### Internals
-- `BackpackManager` fields `plugin`, `dataFolder` and `teamRegistry` are final; a failure to create the backpacks data folder is logged as a warning.
-- Removed dead locale plumbing (unused `Locale` field/parameter in `BackpackManager`, unused `locale()` accessor in `PluginSettings`).
-- Removed the unused `mockito-core` test dependency and the unused `share-usage` / `invite-usage` lang keys.
-- `UpdateChecker.isNewerVersion` is package-private static; its test now exercises the real method instead of a duplicated copy of the logic. Added cases for `v` prefixes and unparseable versions.
-- plugin.yml description no longer mentions the non-existent "admin insert" feature.
-- New message key: `players-only` (en/de).
-
-### Verification
-- `./gradlew build` passes: compilation, JUnit tests, Checkstyle and SpotBugs.
-- Command API usage verified against the Paper 26.2 Javadocs (`ArgumentTypes.player()`, Brigadier lifecycle registration, Folia-style schedulers).
-
 ## 7.0 - 2026-08-22
 
 ### Changed (Breaking)
@@ -37,13 +13,17 @@
 - Tab completion: player names for `/invite` and `/backpackshare`, plus `accept` and `gui` subcommand suggestions.
 - Admin GUI pagination (45 entries per page) with previous/next buttons and a page info item.
 - Team invites expire after 5 minutes with a dedicated message when accepting too late.
-- New configurable messages: `backpack-full`, `resize-no-space`, `team-invite-expired`, `admin-gui-disabled`.
+- New configurable messages: `backpack-full`, `resize-no-space`, `team-invite-expired`, `admin-gui-disabled`, `players-only`, `gui-default-backpack-name`.
 
 ### Fixed
 - Fixed silent item loss when shrinking the backpack: items from removed slots move to the player inventory; the resize aborts safely if there is not enough space.
 - Fixed drag events bypassing the click cancellation of preview views, the config GUI and the admin list.
 - Fixed a death wiping the whole shared team or temporarily shared backpack when `backpack.keep-on-death` was disabled; only personally owned backpacks are cleared now.
 - Fixed team owner succession being random (HashSet order); the member with the lowest UUID now takes over deterministically.
+- `/team accept` no longer loses the accepting player: when the inviter had no team yet, the created team previously contained only the inviter while the accepting player stayed teamless.
+- The team size limit (`team.max-size`) is re-checked when an invite is accepted; accepting after the team filled up no longer exceeds the cap and reports `team-full` instead.
+- Fixed a race where a quick reconnect after quitting could serve stale backpack data: the cached inventory was evicted while its quit-time save write was still in flight. Cache eviction is now chained onto write completion, and the recent-save deduplication marker is only recorded after the inventory-close save actually finished.
+- Console and other non-player senders running player-only commands now receive the dedicated `players-only` message instead of being told they lack permission.
 - Removed the custom shift-click handler that duplicated vanilla behavior and risked item duplication; backpack views rely on vanilla inventory behavior.
 - The documented `admin.enable-gui` option is now honored; `/backpackadmin gui` reports when it is disabled instead of doing nothing.
 - `clearBackpack` uses the inventory's real size instead of the configured size, which could mismatch after size changes.
@@ -57,12 +37,17 @@
 - Admin GUI stores owner UUIDs in the item's PersistentDataContainer instead of parsing lore text; only clicks inside the admin list are processed.
 - Inventory holders now return their actual inventory instead of null (`InventoryHolder` contract).
 - Localized messaging centralized in a new `Messages` class; hardcoded DE/EN ternaries replaced with config message keys.
-- Dead code removed (`leaveTeam`, `giveItemToAll`, `setBackpacksEnabled`, `isInTeam`) and manager config fields that were never read dropped; `BackpackManager` constructor shrunk from 12 to 6 parameters.
-- Update checker uses `java.net.http.HttpClient`, `getPluginMeta()` and Gson; the org.json dependency was removed because it was never included in the shaded jar (runtime NoClassDefFoundError risk).
-- Obsolete mockito-inline test dependency removed; plugin.yml version is now derived from the Gradle project version.
+- The config GUI "Change Name" reset uses the `gui-default-backpack-name` lang key; known-backpack listing explicitly excludes `*.overflow.yml` sidecar files.
+- `BackpackManager` fields `plugin`, `dataFolder` and `teamRegistry` are final; a failure to create the backpacks data folder is logged as a warning.
+- Removed dead code (`leaveTeam`, `giveItemToAll`, `setBackpacksEnabled`, `isInTeam`), manager config fields that were never read and the unused locale plumbing (`Locale` field/parameter in `BackpackManager`, `locale()` accessor in `PluginSettings`); `BackpackManager` constructor shrunk accordingly.
+- Removed the unused `mockito-core` test dependency and the unused `share-usage` / `invite-usage` lang keys.
+- Update checker uses `java.net.http.HttpClient`, `getPluginMeta()` and Gson; `isNewerVersion` is package-private static and its test exercises the real method instead of a duplicated copy of the logic. The org.json dependency was removed because it was never included in the shaded jar (runtime NoClassDefFoundError risk).
+- Obsolete mockito-inline test dependency removed; plugin.yml version is now derived from the Gradle project version and its description no longer mentions the non-existent "admin insert" feature.
+- New message key: `players-only` (en/de).
 
 ### Verification
-- `./gradlew.bat clean check` passes: compilation, JUnit tests, Checkstyle and SpotBugs.
+- `./gradlew clean check` passes: compilation, JUnit tests, Checkstyle and SpotBugs.
+- Command API usage verified against the Paper 26.2 Javadocs (`ArgumentTypes.player()`, Brigadier lifecycle registration, Folia-style schedulers).
 
 ## 6.0 - 2026-08-20
 
