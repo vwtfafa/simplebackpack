@@ -15,7 +15,7 @@ class BackpackManagerTest {
         UUID player = UUID.randomUUID();
         SharedSession session = new SharedSession(player, System.currentTimeMillis() + 1000);
 
-        assertEquals(player, session.getOwner());
+        assertEquals(player, session.owner());
         assertFalse(session.isExpired());
         }
 

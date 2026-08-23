@@ -2,20 +2,13 @@ package org.vwtfafa.backpack;
 
 import java.util.UUID;
 
-public class SharedSession {
-    private final UUID owner;
-    private final long expiryMillis;
+/**
+ * A temporary grant that lets a player open another player's backpack
+ * until the expiry timestamp.
+ */
+record SharedSession(UUID owner, long expiryMillis) {
 
-    public SharedSession(UUID owner, long expiryMillis) {
-        this.owner = owner;
-        this.expiryMillis = expiryMillis;
-    }
-
-    public UUID getOwner() {
-        return owner;
-    }
-
-    public boolean isExpired() {
+    boolean isExpired() {
         return System.currentTimeMillis() > expiryMillis;
     }
 }

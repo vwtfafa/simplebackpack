@@ -85,7 +85,7 @@ public class BackpackManager implements Listener {
         // check if this player has a temporary share to another owner's backpack
         SharedSession session = sharedSessions.get(uuid);
         if (session != null && !session.isExpired()) {
-            UUID owner = session.getOwner();
+            UUID owner = session.owner();
             return backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         }
         if (teamEnabled) {
@@ -202,7 +202,7 @@ public class BackpackManager implements Listener {
         // Check shared session first
         SharedSession session = sharedSessions.get(playerId);
         if (session != null && !session.isExpired()) {
-            return session.getOwner();
+            return session.owner();
         }
         // Check team ownership
         if (teamEnabled) {
