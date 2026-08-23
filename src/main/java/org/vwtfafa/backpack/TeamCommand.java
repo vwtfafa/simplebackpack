@@ -92,8 +92,11 @@ final class TeamCommand extends SubCommand {
         }
         StringBuilder names = new StringBuilder();
         for (UUID member : teamMembers) {
-            Player memberPlayer = Bukkit.getPlayer(member);
-            String name = memberPlayer != null ? memberPlayer.getName() : member.toString();
+            // Resolve offline members by name as well; fall back to the UUID
+            String name = Bukkit.getOfflinePlayer(member).getName();
+            if (name == null) {
+                name = member.toString();
+            }
             if (member.equals(teamOwner)) {
                 name += " (L)";
             }
