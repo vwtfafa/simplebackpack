@@ -64,7 +64,7 @@ public class Backpack extends JavaPlugin implements Listener {
         loadConfigOptions();
         new Metrics(this, BSTATS_PLUGIN_ID);
         getLogger().info("bStats metrics enabled (ID: " + BSTATS_PLUGIN_ID + ")");
-        manager = new BackpackManager(this, getBackpackName(), getBackpackSize(), teamRegistry, teamEnabled, locale);
+        manager = new BackpackManager(this, messages, getBackpackName(), getBackpackSize(), teamRegistry, teamEnabled, locale);
         getServer().getPluginManager().registerEvents(this, this);
         registerCommands();
         if (adminEnabled && adminGuiEnabled) adminGui = new AdminGUI(manager);

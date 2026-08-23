@@ -57,9 +57,9 @@ public class BackpackManager implements Listener {
     // without keeping an ever-growing per-owner lock map
     private final Object saveIoLock = new Object();
 
-    public BackpackManager(JavaPlugin plugin, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled, Locale locale) {
+    public BackpackManager(JavaPlugin plugin, Messages messages, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled, Locale locale) {
         this.plugin = plugin;
-        this.messages = new Messages(plugin);
+        this.messages = messages;
         this.backpackName = backpackName;
         this.teamRegistry = teamRegistry;
         this.teamEnabled = teamEnabled;
@@ -390,7 +390,6 @@ public class BackpackManager implements Listener {
         this.backpackSize = backpackSize;
         this.teamEnabled = teamEnabled;
         this.locale = locale;
-        this.messages.reload();
         this.configCache = plugin.getConfig();
     }
 
