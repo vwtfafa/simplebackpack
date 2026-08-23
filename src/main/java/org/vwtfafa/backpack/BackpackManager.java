@@ -362,8 +362,9 @@ public class BackpackManager implements Listener {
         Inventory inv = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         // open a new inventory view for admin with same contents
         BackpackInventoryHolder holder = BackpackInventoryHolder.admin(owner, preview);
+        String ownerName = Bukkit.getOfflinePlayer(owner).getName();
         Inventory view = Bukkit.createInventory(holder, inv.getSize(),
-                Component.text("Backpack: " + owner));
+                Component.text("Backpack: " + (ownerName != null ? ownerName : owner.toString())));
         holder.setInventory(view);
         for (int i = 0; i < inv.getSize(); i++) view.setItem(i, inv.getItem(i));
         admin.openInventory(view);
