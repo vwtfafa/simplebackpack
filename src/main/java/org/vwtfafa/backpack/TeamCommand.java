@@ -59,8 +59,14 @@ final class TeamCommand extends SubCommand {
         if (owner == null) {
             Set<UUID> members = new HashSet<>();
             members.add(inviterId);
+            members.add(targetId);
             plugin.teamRegistry().createTeam(inviterId, members);
         } else {
+            // The team may have filled up between invite and accept
+            if (plugin.teamRegistry().membersOf(owner).size() >= plugin.teamMaxSize()) {
+                plugin.messages().send(player, "team-full");
+                return;
+            }
             plugin.teamRegistry().addMember(owner, targetId);
         }
         plugin.saveTeams();
