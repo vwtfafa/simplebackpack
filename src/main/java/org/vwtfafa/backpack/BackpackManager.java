@@ -297,8 +297,13 @@ public class BackpackManager implements Listener {
     private void logAudit(String line) {
         String timestamped = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now())
                 + " - " + line;
-        // File I/O must not block the main thread
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> writeAuditLine(timestamped));
+        // File I/O must not block the main thread; while the plugin is
+        // disabling, scheduled async tasks are never run, so write directly
+        if (plugin.isEnabled()) {
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> writeAuditLine(timestamped));
+        } else {
+            writeAuditLine(timestamped);
+        }
     }
 
     private void writeAuditLine(String line) {
