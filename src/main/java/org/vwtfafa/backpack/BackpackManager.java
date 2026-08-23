@@ -48,12 +48,12 @@ public class BackpackManager implements Listener {
     private static final List<NamedTextColor> TITLE_COLOR_CYCLE =
             List.of(NamedTextColor.AQUA, NamedTextColor.GREEN, NamedTextColor.RED);
 
-    private JavaPlugin plugin;
+    private final JavaPlugin plugin;
     private final Messages messages;
     private final Map<UUID, Inventory> backpacks = new ConcurrentHashMap<>();
-    private TeamRegistry teamRegistry;
+    private final TeamRegistry teamRegistry;
     private boolean teamEnabled;
-    private File dataFolder;
+    private final File dataFolder;
     private volatile String backpackName;
     private volatile int backpackSize;
     private Locale locale;
@@ -341,16 +341,20 @@ public class BackpackManager implements Listener {
      * are snapshotted synchronously and written on an async task. Used for
      * quit-time autosave so disconnects never cause main-thread disk I/O.
      * Skipped when the inventory-close save triggered by this very
-     * disconnect just persisted the same backpack.
+     * disconnect already finished persisting the same backpack; in that
+     * case {@code afterWrite} runs immediately on the current thread.
+     * Otherwise {@code afterWrite} runs on the main thread once the write
+     * has completed, so cache eviction can never race a pending write.
      */
-    public void saveBackpackAsync(Player player) {
+    public void saveBackpackAsync(Player player, Runnable afterWrite) {
         UUID owner = resolveEffectiveOwner(player.getUniqueId());
         Long lastSave = recentSaveOwners.remove(owner);
         if (lastSave != null && System.currentTimeMillis() - lastSave <= RECENT_SAVE_WINDOW_MILLIS) {
+            afterWrite.run();
             return;
         }
         Inventory inv = getBackpack(player);
-        saveInventoryAsync(owner, snapshot(inv), "quit");
+        saveInventoryAsync(owner, snapshot(inv), "quit", afterWrite);
     }
 
     public void saveAllBackpacks() {
@@ -451,7 +455,7 @@ public class BackpackManager implements Listener {
         for (int i = 0; i < inv.getSize(); i++) {
             inv.setItem(i, null);
         }
-        saveInventoryAsync(ownerId, snapshot(inv), "death");
+        saveInventoryAsync(ownerId, snapshot(inv), "death", () -> { });
     }
 
     /**
@@ -463,7 +467,7 @@ public class BackpackManager implements Listener {
         for (int i = 0; i < inv.getSize(); i++) {
             inv.setItem(i, null);
         }
-        saveInventoryAsync(ownerId, snapshot(inv), "admin-clear");
+        saveInventoryAsync(ownerId, snapshot(inv), "admin-clear", () -> { });
         logAudit("ADMIN_CLEAR " + admin.getName() + " -> " + ownerId.toString());
     }
 
@@ -625,15 +629,17 @@ public class BackpackManager implements Listener {
                     } catch (IOException ignored) {}
                 }
 
-                saveInventoryAsync(owner, snapshot(stored), "admin");
+                saveInventoryAsync(owner, snapshot(stored), "admin", () -> { });
                 logAudit("ADMIN_SAVE " + viewer.getName() + " -> " + owner.toString());
                 return;
         }
-        // If this was a normal backpack view, save owner's backpack on close
+        // If this was a normal backpack view, save owner's backpack on close;
+        // the recent-save marker is only recorded once the write finished so
+        // quit-time deduplication never skips while a write is still pending
         if (holder.getType() == BackpackInventoryHolder.Type.BACKPACK) {
             UUID owner = holder.getOwner();
-            recentSaveOwners.put(owner, System.currentTimeMillis());
-            saveInventoryAsync(owner, snapshot(event.getInventory()), "close");
+            saveInventoryAsync(owner, snapshot(event.getInventory()), "close",
+                    () -> recentSaveOwners.put(owner, System.currentTimeMillis()));
         }
     }
 
@@ -687,7 +693,7 @@ public class BackpackManager implements Listener {
         return false;
     }
 
-    private void saveInventoryAsync(UUID owner, ItemStack[] contents, String source) {
+    private void saveInventoryAsync(UUID owner, ItemStack[] contents, String source, Runnable onComplete) {
         // The contents were snapshotted synchronously by the caller, so the
         // async write never races inventory mutations
         plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
@@ -696,8 +702,22 @@ public class BackpackManager implements Listener {
             } catch (RuntimeException e) {
                 plugin.getLogger().log(java.util.logging.Level.SEVERE,
                         "Failed to save backpack " + owner + " from " + source, e);
+            } finally {
+                runOnMainThread(onComplete);
             }
         });
+    }
+
+    /**
+     * Runs the callback on the main thread (global region scheduler) once a
+     * pending async write finished; skipped while the plugin is disabling
+     * because shutdown saves everything synchronously anyway.
+     */
+    private void runOnMainThread(Runnable callback) {
+        if (!plugin.isEnabled()) {
+            return;
+        }
+        plugin.getServer().getGlobalRegionScheduler().run(plugin, task -> callback.run());
     }
 
     private void writeInventory(UUID owner, ItemStack[] contents, String source) {
