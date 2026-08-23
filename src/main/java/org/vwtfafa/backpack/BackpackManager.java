@@ -125,6 +125,20 @@ public class BackpackManager implements Listener {
         // Resolve the effective owner to maintain team/share integrity
         UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
         Inventory oldInv = backpacks.get(effectiveOwner);
+        // Close every open view of the old inventory before swapping so no
+        // viewer keeps editing a detached inventory that would later be saved
+        // over the resized one (split-brain data loss)
+        if (oldInv != null) {
+            List<Player> viewers = new ArrayList<>();
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                if (oldInv.equals(online.getOpenInventory().getTopInventory())) {
+                    viewers.add(online);
+                }
+            }
+            for (Player viewer : viewers) {
+                viewer.closeInventory();
+            }
+        }
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(effectiveOwner);
         Inventory newInv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
         holder.setInventory(newInv);
@@ -133,11 +147,16 @@ public class BackpackManager implements Listener {
             for (int i = 0; i < keptSlots; i++) {
                 newInv.setItem(i, oldInv.getItem(i));
             }
-            // Hand items from removed slots back to the player so nothing is lost
+            // Hand items from removed slots back to the player so nothing is lost;
+            // anything that no longer fits is dropped instead of vanishing
             for (int i = keptSlots; i < oldInv.getSize(); i++) {
                 ItemStack item = oldInv.getItem(i);
-                if (item != null && !item.getType().isAir()) {
-                    player.getInventory().addItem(item);
+                if (item == null || item.getType().isAir()) {
+                    continue;
+                }
+                Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
+                for (ItemStack rest : leftover.values()) {
+                    player.getWorld().dropItemNaturally(player.getLocation(), rest);
                 }
             }
         }
