@@ -26,6 +26,11 @@ public class UpdateChecker {
     private static final String RELEASE_PAGE_URL =
             "https://github.com/vwtfafa/SimpleBackpack/releases";
 
+    // HttpClient is immutable and thread-safe; one shared instance serves all checks
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
+
     private final JavaPlugin plugin;
     private final String currentVersion;
     private volatile String latestVersion = null;
@@ -40,18 +45,18 @@ public class UpdateChecker {
      * Loads the latest version from GitHub asynchronously and notifies operators
      */
     public void checkForUpdates() {
+        if (!plugin.getConfig().getBoolean("update-checker.enabled", true)) {
+            return;
+        }
         Bukkit.getAsyncScheduler().runNow(plugin, task -> {
             try {
-                HttpClient client = HttpClient.newBuilder()
-                        .connectTimeout(Duration.ofSeconds(5))
-                        .build();
                 HttpRequest request = HttpRequest.newBuilder(URI.create(RELEASES_API_URL))
                         .timeout(Duration.ofSeconds(5))
                         .header("User-Agent", "SimpleBackpack/" + currentVersion)
                         .header("Accept", "application/vnd.github+json")
                         .GET()
                         .build();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() / 100 != 2) {
                     throw new IOException("GitHub returned HTTP " + response.statusCode());
                 }

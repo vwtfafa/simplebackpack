@@ -36,8 +36,9 @@ enable-sharing: true         # Enable /backpackshare command and temporary shari
 
 # === Update Checker ===
 update-checker:
+  enabled: true              # Master switch; if false, no update check is performed at all
   notify-ops: true           # Include operators (without the admin permission) as update notification recipients
-  notify-chat: true          # Send update notifications in chat (master switch)
+  notify-chat: true          # Send update notifications in chat
 
 # === Messaging ===
 messages-enabled: true        # If false, no messages will be sent to players
