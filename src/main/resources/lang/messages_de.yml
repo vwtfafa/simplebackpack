@@ -3,6 +3,7 @@
 # Platzhalter wie {player} werden vom Plugin ersetzt.
 open-success: "<aqua>Dein Rucksack ist jetzt geöffnet!"
 no-permission: "<red>Du hast keine Berechtigung für diesen Befehl."
+players-only: "<red>Dieser Befehl kann nur von Spielern verwendet werden."
 not-allowed-world: "<red>Du kannst deinen Rucksack in dieser Welt nicht benutzen."
 first-join: "<yellow>Willkommen! Nutze /backpack, um deinen persönlichen Rucksack zu öffnen. Du kannst ihn mit deinem Team teilen und über /backpackconfig konfigurieren."
 creative-not-allowed: "<red>Rucksack ist im Kreativmodus nicht verfügbar."

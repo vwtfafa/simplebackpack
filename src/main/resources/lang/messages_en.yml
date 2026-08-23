@@ -3,6 +3,7 @@
 # Placeholders like {player} are replaced by the plugin.
 open-success: "<aqua>Your backpack is now open!"
 no-permission: "<red>You do not have permission to use this command."
+players-only: "<red>This command can only be used by players."
 not-allowed-world: "<red>You cannot use your backpack in this world."
 first-join: "<yellow>Welcome! Use /backpack to open your personal backpack. You can share it with your team and configure it via /backpackconfig."
 creative-not-allowed: "<red>Backpack is not available in Creative mode."
@@ -36,6 +37,7 @@ config-changed-size: "<green>Backpack size changed."
 resize-no-space: "<red>Not enough space in your inventory to shrink the backpack."
 # GUI labels (always shown, regardless of messages-enabled)
 gui-config-title: "<aqua>Backpack Config"
+gui-default-backpack-name: "<aqua>Backpack"
 gui-admin-list-title: "<aqua>SimpleBackpack Admin"
 gui-admin-view-title: "<aqua>Backpack: {player}"
 gui-prev-page: "<yellow>< Previous page"

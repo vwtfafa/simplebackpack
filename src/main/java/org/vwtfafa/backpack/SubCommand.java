@@ -26,7 +26,7 @@ abstract class SubCommand {
         if (sender instanceof Player player) {
             return player;
         }
-        plugin.messages().send(sender, "no-permission");
+        plugin.messages().send(sender, "players-only");
         return null;
     }
 
