@@ -6,6 +6,7 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -86,6 +87,9 @@ public class BackpackManager implements Listener {
     public void openBackpack(Player player) {
         Inventory inv = getBackpack(player);
         player.openInventory(inv);
+        if (plugin.getConfig().getBoolean("backpack.open-sound", true)) {
+            player.playSound(player.getLocation(), Sound.BLOCK_BARREL_OPEN, 1.0f, 1.0f);
+        }
     }
 
     public Inventory getBackpack(Player player) {
