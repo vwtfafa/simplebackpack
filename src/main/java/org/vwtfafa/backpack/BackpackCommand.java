@@ -36,6 +36,10 @@ final class BackpackCommand extends SubCommand {
             plugin.messages().send(player, "backpacks-disabled");
             return;
         }
+        if (plugin.disabledWorlds().contains(player.getWorld().getName())) {
+            plugin.messages().send(player, "not-allowed-world");
+            return;
+        }
         if (!plugin.allowInCreative() && player.getGameMode() == GameMode.CREATIVE) {
             plugin.messages().send(player, "creative-not-allowed");
             return;

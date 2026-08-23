@@ -183,6 +183,10 @@ public class Backpack extends JavaPlugin implements Listener {
         return allowInCreative;
     }
 
+    List<String> disabledWorlds() {
+        return getConfig().getStringList("backpack.disabled-worlds");
+    }
+
     boolean guiConfigurable() {
         return guiConfigurable;
     }

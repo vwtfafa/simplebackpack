@@ -3,6 +3,7 @@
 # Platzhalter wie {player} werden vom Plugin ersetzt.
 open-success: "<aqua>Dein Rucksack ist jetzt geöffnet!"
 no-permission: "<red>Du hast keine Berechtigung für diesen Befehl."
+not-allowed-world: "<red>Du kannst deinen Rucksack in dieser Welt nicht benutzen."
 creative-not-allowed: "<red>Rucksack ist im Kreativmodus nicht verfügbar."
 reload-success: "<green>Konfiguration erfolgreich neu geladen."
 team-invite: "<green>Du hast {player} in dein Team eingeladen."
