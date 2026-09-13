@@ -1,7 +1,7 @@
 name: SimpleBackpack
 main: org.vwtfafa.backpack.Backpack
 version: '${version}'
-api-version: 26.2
+api-version: 26.3
 permissions:
   simplebackpack.use:
     description: Allows using /backpack and /bp
