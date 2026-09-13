@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.1 - 2026-09-13
+
+### Changed
+- Updated to Paper `26.3-pre-2.build.0-alpha` (`api-version: 26.3`, `runServer: 26.3-pre-2`).
+- Bumped plugin version to 7.1.
+
 ## 7.0 - 2026-08-22
 
 ### Changed (Breaking)
