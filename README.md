@@ -140,11 +140,11 @@ Edit `.github/release-config.yml` to configure release types per branch:
 branches:
   master:
     type: stable
-    paper: "26.2"
+    paper: "26.3"
     java: "25"
   beta:
     type: beta
-    paper: "26.2"
+    paper: "26.3"
     java: "25"
 ```
 
@@ -152,13 +152,13 @@ branches:
 
 | Platform | Version | Support |
 | -------- | ------- | ------- |
-| **Paper** | 26.2+ | ✅ Supported |
-| **Purpur** | 26.2+ | ⚠️ Expected to work, not separately tested |
+| **Paper** | 26.3+ | ✅ Supported |
+| **Purpur** | 26.3+ | ⚠️ Expected to work, not separately tested |
 
 ## Requirements
 
 - Java 25
-- Paper 26.2+
+- Paper 26.3+
 - GitHub access (for update checker)
 
 ## Author
