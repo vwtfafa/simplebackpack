@@ -11,7 +11,7 @@ plugins {
 }
 
 group = 'org.vwtfafa'
-version = '5.0'
+version = '7.1'
 
 repositories {
     mavenCentral()
@@ -23,16 +23,14 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.2.build.112-stable")
+    compileOnly("io.papermc.paper:paper-api:26.3-rc-3.build.1-alpha")
+    compileOnly("com.google.code.gson:gson:2.11.0")
 
-    implementation 'org.json:json:20260814'
     implementation("org.bstats:bstats-bukkit:3.2.1")
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.0'
-    testImplementation 'org.mockito:mockito-core:5.0.0'
-    testImplementation 'org.mockito:mockito-inline:5.0.0'
-    testImplementation 'io.papermc.paper:paper-api:26.2.build.112-stable'
+    testImplementation 'io.papermc.paper:paper-api:26.3-rc-3.build.1-alpha'
 }
 
 tasks {
@@ -41,7 +39,7 @@ tasks {
     }
 
     runServer {
-        minecraftVersion("26.2")
+        minecraftVersion("26.3-pre-2")
     }
 
     jar {

@@ -1,41 +1,7 @@
 name: SimpleBackpack
 main: org.vwtfafa.backpack.Backpack
-version: 5.0
-api-version: 26.2
-commands:
-  backpack:
-    description: Opens your personal backpack (configurable size, persistent)
-    usage: /backpack
-    aliases: [bp]
-    permission: simplebackpack.use
-  backpackconfig:
-    description: Open the backpack configuration GUI
-    usage: /backpackconfig
-    permission: simplebackpack.config
-  backpackreload:
-    description: Reloads the SimpleBackpack config
-    usage: /backpackreload
-    permission: simplebackpack.reload
-  invite:
-    description: Invite a player to your team to share your backpack
-    usage: /invite <player>
-    permission: simplebackpack.team.invite
-  team:
-    description: Show your team members
-    usage: /team
-    permission: simplebackpack.team
-  leave:
-    description: Leave your current team
-    usage: /leave
-    permission: simplebackpack.team.leave
-  backpackadmin:
-    description: Admin commands for SimpleBackpack
-    usage: /backpackadmin <args>
-    permission: simplebackpack.admin
-  backpackshare:
-    description: Temporarily share your backpack with another player
-    usage: /backpackshare <player> [durationMinutes]
-    permission: simplebackpack.use
+version: '${version}'
+api-version: 26.3
 permissions:
   simplebackpack.use:
     description: Allows using /backpack and /bp
@@ -59,7 +25,6 @@ permissions:
     description: Allows using admin commands
     default: op
 authors: ["vwtfafa"]
-softdepend: [Vault]
 
 description: >
   SimpleBackpack — persistent, configurable player backpacks with a clean vanilla-style GUI.
@@ -68,7 +33,7 @@ description: >
     - Personal Backpacks: per-player persistent backpacks with configurable size, name and color.
     - Team Backpacks: create/invite/share backpacks with simple team commands.
     - Classic Mode: minimal mode with only /backpack and /bp.
-    - Admin Tools: admin GUI, admin insert, live reload and audit logging.
+    - Admin Tools: admin GUI, live reload and audit logging.
     - Live Config GUI: change size, color and other options in-game with instant apply.
     - Multi-language: English and German included; messages fully editable.
     - Improved Storage: persistent YAML storage (compatible with previous versions) with async saves.

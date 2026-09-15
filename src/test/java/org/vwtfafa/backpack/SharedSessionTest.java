@@ -16,7 +16,7 @@ class SharedSessionTest {
         long expiry = System.currentTimeMillis() + 3600000;
         SharedSession session = new SharedSession(owner, expiry);
 
-        assertEquals(owner, session.getOwner());
+        assertEquals(owner, session.owner());
         assertFalse(session.isExpired());
     }
 
@@ -26,7 +26,7 @@ class SharedSessionTest {
         long expiry = System.currentTimeMillis() - 1000;
         SharedSession session = new SharedSession(owner, expiry);
 
-        assertEquals(owner, session.getOwner());
+        assertEquals(owner, session.owner());
         assertTrue(session.isExpired());
     }
 
@@ -36,7 +36,7 @@ class SharedSessionTest {
         long expiry = System.currentTimeMillis() + 1000;
         SharedSession session = new SharedSession(owner, expiry);
 
-        assertEquals(owner, session.getOwner());
+        assertEquals(owner, session.owner());
         assertFalse(session.isExpired());
     }
 }

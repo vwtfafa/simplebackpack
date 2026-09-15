@@ -1,97 +1,117 @@
 package org.vwtfafa.backpack;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.URL;
-import java.net.URLConnection;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 
 /**
  * Checks for updates on GitHub and notifies operators.
  */
 public class UpdateChecker {
+    private static final String RELEASES_API_URL =
+            "https://api.github.com/repos/vwtfafa/SimpleBackpack/releases/latest";
+    private static final String RELEASE_PAGE_URL =
+            "https://github.com/vwtfafa/SimpleBackpack/releases";
+
+    // HttpClient is immutable and thread-safe; one shared instance serves all checks
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
+
     private final JavaPlugin plugin;
     private final String currentVersion;
-    private String latestVersion = null;
-    private boolean updateAvailable = false;
+    private volatile String latestVersion = null;
+    private volatile boolean updateAvailable = false;
 
     public UpdateChecker(JavaPlugin plugin) {
         this.plugin = plugin;
-        this.currentVersion = plugin.getDescription().getVersion();
+        this.currentVersion = plugin.getPluginMeta().getVersion();
     }
 
     /**
-     * Loads the latest version from GitHub asynchronously and notifies ops
+     * Loads the latest version from GitHub asynchronously and notifies operators
      */
     public void checkForUpdates() {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        if (!plugin.getConfig().getBoolean("update-checker.enabled", true)) {
+            return;
+        }
+        Bukkit.getAsyncScheduler().runNow(plugin, task -> {
             try {
-                // Fetch the latest version from GitHub API
-                URL url = new URL("https://api.github.com/repos/vwtfafa/SimpleBackpack/releases/latest");
-                URLConnection connection = url.openConnection();
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(5000);
-
-                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-                String line;
-                StringBuilder response = new StringBuilder();
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
+                HttpRequest request = HttpRequest.newBuilder(URI.create(RELEASES_API_URL))
+                        .timeout(Duration.ofSeconds(5))
+                        .header("User-Agent", "SimpleBackpack/" + currentVersion)
+                        .header("Accept", "application/vnd.github+json")
+                        .GET()
+                        .build();
+                HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() / 100 != 2) {
+                    throw new IOException("GitHub returned HTTP " + response.statusCode());
                 }
-                reader.close();
+                parseRelease(response.body());
 
-                // Parse the version from the JSON response
-                String json = response.toString();
-                int tagIndex = json.indexOf("\"tag_name\":\"");
-                if (tagIndex != -1) {
-                    int startIndex = tagIndex + 12;
-                    int endIndex = json.indexOf("\"", startIndex);
-                    latestVersion = json.substring(startIndex, endIndex);
-                    updateAvailable = isNewerVersion(latestVersion, currentVersion);
-
-                    if (updateAvailable) {
-                        plugin.getLogger().info("========================================");
-                        plugin.getLogger().info("SimpleBackpack update available!");
-                        plugin.getLogger().info("Current version: " + currentVersion);
-                        plugin.getLogger().info("New version: " + latestVersion);
-                        plugin.getLogger().info("Release page: https://github.com/vwtfafa/SimpleBackpack/releases");
-                        plugin.getLogger().info("========================================");
-
-                        // Notify online operators
-                        notifyOps();
-                    }
+                if (updateAvailable) {
+                    logUpdateAvailable();
+                    notifyAdmins();
                 }
-            } catch (Exception e) {
+            } catch (IOException | InterruptedException e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 plugin.getLogger().warning("Update-Check fehlgeschlagen: " + e.getMessage());
             }
         });
     }
 
-    /**
-     * Sends a chat notification to online operators about available updates
-     */
-    private void notifyOps() {
-        boolean notifyOps = plugin.getConfig().getBoolean("update-checker.notify-ops", true);
-        boolean notifyChat = plugin.getConfig().getBoolean("update-checker.notify-chat", true);
-
-        if (!notifyOps || !notifyChat) {
+    private void parseRelease(String body) {
+        JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+        if (!json.has("tag_name")) {
             return;
         }
+        latestVersion = json.get("tag_name").getAsString();
+        updateAvailable = isNewerVersion(latestVersion, currentVersion);
+    }
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            String releaseUrl = "https://github.com/vwtfafa/SimpleBackpack/releases";
-            Component message = Component.text("[SimpleBackpack] Update available: " + latestVersion + " - Open release page")
-                    .color(net.kyori.adventure.text.format.NamedTextColor.GOLD)
-                    .clickEvent(ClickEvent.openUrl(releaseUrl))
+    private void logUpdateAvailable() {
+        plugin.getLogger().info("========================================");
+        plugin.getLogger().info("SimpleBackpack update available!");
+        plugin.getLogger().info("Current version: " + currentVersion);
+        plugin.getLogger().info("New version: " + latestVersion);
+        plugin.getLogger().info("Release page: " + RELEASE_PAGE_URL);
+        plugin.getLogger().info("========================================");
+    }
+
+    /**
+     * Sends a chat notification about the available update.
+     * Recipients are players with the admin permission and, when
+     * {@code update-checker.notify-ops} is enabled, operators.
+     */
+    private void notifyAdmins() {
+        boolean notifyOps = plugin.getConfig().getBoolean("update-checker.notify-ops", true);
+        boolean notifyChat = plugin.getConfig().getBoolean("update-checker.notify-chat", true);
+        if (!notifyChat) {
+            return;
+        }
+        Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+            Component message = Component.text(
+                            "[SimpleBackpack] Update available: " + latestVersion + " - Open release page")
+                    .color(NamedTextColor.GOLD)
+                    .clickEvent(ClickEvent.openUrl(RELEASE_PAGE_URL))
                     .hoverEvent(HoverEvent.showText(Component.text("Open the latest release page")));
             for (Player player : Bukkit.getOnlinePlayers()) {
-                if (player.isOp() || player.hasPermission("simplebackpack.admin")) {
+                if ((notifyOps && player.isOp()) || player.hasPermission("simplebackpack.admin")) {
                     player.sendMessage(message);
                 }
             }
@@ -101,7 +121,7 @@ public class UpdateChecker {
     /**
      * Compares two version strings
      */
-    private boolean isNewerVersion(String newVersion, String currentVersion) {
+    static boolean isNewerVersion(String newVersion, String currentVersion) {
         try {
             // Remove 'v' prefix if present
             newVersion = newVersion.replaceFirst("^v", "");

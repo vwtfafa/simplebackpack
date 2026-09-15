@@ -1,15 +1,16 @@
 # SimpleBackpack
 
-A persistent, configurable backpack plugin for Minecraft (Paper/Spigot/Bukkit/Purpur).
+A persistent, configurable backpack plugin for Minecraft Paper.
 
 ## Features
 
 - **Personal Persistent Backpacks** - Per-player backpacks with configurable size, name and color
-- **Team Backpacks** - Create/invite/share backpacks with simple team commands
+- **Team Backpacks** - Create/invite/share backpacks with simple team commands (invites expire after 5 minutes)
 - **Classic Mode** - Minimal mode with only `/backpack` and `/bp`
-- **Admin Tools** - Admin GUI, admin edits, audit logging
+- **Admin Tools** - Admin GUI with pagination, admin edits, audit logging
 - **Live Config GUI** - Change backpack configuration in-game with instant apply
 - **Multi-language** - English and German included; messages fully editable
+- **Brigadier Commands** - Registered via Paper's Brigadier lifecycle API with tab completion
 - **Update Checker** - Notifies operators when updates are available on GitHub
 - **bStats Metrics** - Anonymous statistics tracking (plugin ID: 32528)
 - **Unit Tests** - JUnit 5 tests for core functionality
@@ -22,6 +23,10 @@ A persistent, configurable backpack plugin for Minecraft (Paper/Spigot/Bukkit/Pu
 
 ## Commands
 
+Commands are registered through Paper's Brigadier API. Visibility flags
+(`classic-mode`, `show-team-commands`, `show-admin-commands`) apply at startup —
+changing them requires a server restart.
+
 | Command | Description | Permission |
 | ------- | ----------- | ---------- |
 | `/backpack`, `/bp` | Open your personal backpack | `simplebackpack.use` |
@@ -31,7 +36,10 @@ A persistent, configurable backpack plugin for Minecraft (Paper/Spigot/Bukkit/Pu
 | `/team` | Show your team members | `simplebackpack.team` |
 | `/team accept` | Accept a team invitation | `simplebackpack.team` |
 | `/leave` | Leave your current team | `simplebackpack.team.leave` |
+| `/backpackadmin` | Show admin command overview | `simplebackpack.admin` |
 | `/backpackadmin gui` | Open admin overview GUI | `simplebackpack.admin` |
+| `/backpackadmin clear <player>` | Wipe a player's backpack | `simplebackpack.admin` |
+| `/backpackadmin enable` / `disable` | Toggle backpacks globally (persisted) | `simplebackpack.admin` |
 | `/backpackshare <player> [minutes]` | Temporarily share your backpack | `simplebackpack.use` |
 
 ## Permissions
@@ -58,16 +66,20 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 - `messages-enabled` - Enable/disable player messages
 
 ### Backpack Settings
-- `backpack.name` - Inventory name (supports color codes)
+- `backpack.name` - Inventory title (MiniMessage like `<aqua>`, or legacy `§` codes)
 - `backpack.size` - Backpack size (9, 18, 27, 36, 45, or 54)
 - `backpack.allow-in-creative` - Allow backpack use in creative mode
 - `backpack.auto-save-on-quit` - Auto-save when player disconnects
 - `backpack.keep-on-death` - Keep contents on death
 - `backpack.gui-configurable` - Allow in-game configuration
+- `backpack.open-sound` - Play a sound when opening the backpack
+- `backpack.first-join-message` - One-time welcome message for new players
+- `backpack.disabled-worlds` - World names where `/backpack` cannot be used, e.g. `[example_world]`
 
 ### Team Settings
 - `team.enabled` - Enable team functionality
 - `team.max-size` - Maximum players per team
+- Team invites expire automatically after 5 minutes
 
 ### Admin Settings
 - `admin.enabled` - Enable admin features
@@ -75,16 +87,27 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 - `admin.auto-snapshot` - Auto-create snapshots before admin edits
 
 ### Feature Flags
-- `show-team-commands` - Show/hide team commands
-- `show-admin-commands` - Show/hide admin commands
+- `show-team-commands` - Show/hide team commands (requires restart)
+- `show-admin-commands` - Show/hide admin commands (requires restart)
 - `enable-sharing` - Enable `/backpackshare` command
 
 ### Update Checker
-- `update-checker.notify-ops` - Notify operators about updates
-- `update-checker.notify-chat` - Show update notification in chat
+- `update-checker.enabled` - Master switch; if `false`, no update check runs at all
+- `update-checker.notify-chat` - Send chat notifications about updates
+- `update-checker.notify-ops` - Include operators (without the admin permission) among the recipients
 
 ### Messaging
-Messages are organized by language (`en`/`de`) under `messages.<lang>.<key>`.
+Translations live in separate files that are extracted on first start:
+
+```
+plugins/SimpleBackpack/lang/messages_en.yml
+plugins/SimpleBackpack/lang/messages_de.yml
+```
+
+- Values support MiniMessage tags (`<aqua>`, `<bold>`, ...) and legacy `§` color codes
+- Missing keys fall back to English automatically
+- Custom languages: add e.g. `messages_fr.yml` and set `language: fr`
+- `/backpackreload` reloads translations live
 
 ## Development
 
@@ -117,11 +140,11 @@ Edit `.github/release-config.yml` to configure release types per branch:
 branches:
   master:
     type: stable
-    paper: "26.2"
+    paper: "26.3"
     java: "25"
   beta:
     type: beta
-    paper: "26.2"
+    paper: "26.3"
     java: "25"
 ```
 
@@ -129,15 +152,13 @@ branches:
 
 | Platform | Version | Support |
 | -------- | ------- | ------- |
-| **Paper** | 26.2+ | ✅ Recommended |
-| **Purpur** | 26.2+ | ✅ Works |
-| **Spigot** | 26.2+ | ✅ Works |
-| **Bukkit** | 26.2+ | ✅ Works |
+| **Paper** | 26.3+ | ✅ Supported |
+| **Purpur** | 26.3+ | ⚠️ Expected to work, not separately tested |
 
 ## Requirements
 
 - Java 25
-- Paper/Spigot/Bukkit/Purpur 1.21.10+ (Paper API 26.2)
+- Paper 26.3+
 - GitHub access (for update checker)
 
 ## Author
