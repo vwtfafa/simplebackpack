@@ -1,11 +1,11 @@
 branches:
   master:
     type: stable
-    paper: "26.2"
+    paper: "26.3"
     java: "25"
   main:
     type: stable
-    paper: "26.2"
+    paper: "26.3"
     java: "25"
   beta:
     type: beta

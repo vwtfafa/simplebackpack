@@ -4,6 +4,8 @@
 
 ### Changed
 - Updated to Paper `26.3-pre-2.build.0-alpha` (`api-version: 26.3`, `runServer: 26.3-pre-2`).
+- Updated the compile and test Paper API dependency to `26.3-rc-3.build.1-alpha`.
+- Updated stable release configuration and compatibility documentation to Paper 26.3+.
 - Bumped plugin version to 7.1.
 
 ## 7.0 - 2026-08-22
@@ -53,7 +55,7 @@
 
 ### Verification
 - `./gradlew clean check` passes: compilation, JUnit tests, Checkstyle and SpotBugs.
-- Command API usage verified against the Paper 26.2 Javadocs (`ArgumentTypes.player()`, Brigadier lifecycle registration, Folia-style schedulers).
+- Command API usage verified against the Paper 26.3 Javadocs (`ArgumentTypes.player()`, Brigadier lifecycle registration, Folia-style schedulers).
 
 ## 6.0 - 2026-08-20
 
