@@ -24,7 +24,7 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.3-rc-3.build.1-alpha")
-    compileOnly("com.google.code.gson:gson:2.11.0")
+    compileOnly("com.google.code.gson:gson:2.14.0")
 
     implementation("org.bstats:bstats-bukkit:3.2.1")
 
