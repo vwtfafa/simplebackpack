@@ -1,5 +1,19 @@
 # Changelog
 
+## 7.2 - 2026-10-03
+
+### Changed
+- Updated Paper to `26.3.build.143-beta` (compile and test dependency, latest BETA build 143 from 2026-10-02) and `runServer` to `26.3` (`api-version: 26.3` unchanged).
+- Synced with `origin/beta` (already merged upstream): JUnit Jupiter `5.10.0` → `6.1.3`, JUnit Platform Launcher `1.10.0` → `6.1.3`, SpotBugs plugin `6.5.10` → `6.5.11`, `actions/setup-java` → `v6` and `actions/checkout` → `v7` in the release workflow.
+- Merged open Dependabot PRs: `actions/checkout` `v4` → `v7`, `actions/setup-java` `v4` → `v6` and `gradle/actions` (`wrapper-validation`, `setup-gradle`) `v4` → `v6` in the build workflow.
+- Bumped `com.google.code.gson:gson` from `2.11.0` to `2.14.0` (matches the Paper API dependency).
+- Bumped Gradle wrapper from `9.7.1` to `9.8.0` (`gradle-wrapper.jar`, `gradle-wrapper.properties`, `gradlew.bat`).
+- Bumped plugin version to 7.2.
+
+### Verification
+- `./gradlew build --no-daemon` passes after every update: compilation, JUnit tests, Checkstyle and SpotBugs.
+- Paper API usage verified against the `26.3.build.143-beta` Javadocs; `run-paper` plugin stays at `3.1.0` (latest).
+
 ## 7.1 - 2026-09-13
 
 ### Changed
