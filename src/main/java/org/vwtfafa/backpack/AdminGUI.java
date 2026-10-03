@@ -4,7 +4,6 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -66,10 +65,9 @@ public class AdminGUI implements Listener {
     }
 
     private ItemStack createEntryItem(UUID uuid) {
-        OfflinePlayer owner = Bukkit.getOfflinePlayer(uuid);
+        String name = manager.playerName(uuid);
         ItemStack item = new ItemStack(Material.CHEST);
         ItemMeta meta = item.getItemMeta();
-        String name = owner.getName() != null ? owner.getName() : "Unknown player";
         meta.displayName(Component.text(name));
         List<Component> lore = new ArrayList<>();
         lore.add(messages.component("gui-entry-size", "{size}",

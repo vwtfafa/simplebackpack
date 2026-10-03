@@ -78,6 +78,7 @@ public class BackpackManager implements Listener {
     // a death-clear) is dropped instead of resurrecting deleted items, and the
     // synchronous shutdown save always wins over still-running async writes.
     private final Map<UUID, Long> saveSequences = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerNameCache = new ConcurrentHashMap<>();
 
     public BackpackManager(JavaPlugin plugin, Messages messages, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled) {
         this.plugin = plugin;
@@ -412,6 +413,10 @@ public class BackpackManager implements Listener {
             }
             return;
         }
+        Player ownerPlayer = Bukkit.getPlayer(uuid);
+        if (ownerPlayer != null) {
+            messages.send(ownerPlayer, "backpack-full", "{size}", String.valueOf(rest.size()));
+        }
         YamlConfiguration rewritten = new YamlConfiguration();
         int slot = 0;
         for (ItemStack item : rest.values()) {
@@ -558,14 +563,42 @@ public class BackpackManager implements Listener {
         return backpackSize;
     }
 
+    /**
+     * Resolves a player name with a small in-memory cache so team info and
+     * the admin GUI do not hit the offline-player store dozens of times per
+     * page. Never returns null: unknown players fall back to their UUID.
+     * Refreshed on every player join.
+     */
+    public String playerName(UUID uuid) {
+        String cached = playerNameCache.get(uuid);
+        if (cached != null) {
+            return cached;
+        }
+        String name = Bukkit.getOfflinePlayer(uuid).getName();
+        if (name == null) {
+            return uuid.toString();
+        }
+        playerNameCache.put(uuid, name);
+        return name;
+    }
+
+    /**
+     * Refreshes a cached player name, e.g. after a rename.
+     */
+    public void refreshPlayerName(UUID uuid, String name) {
+        if (name != null) {
+            playerNameCache.put(uuid, name);
+        }
+    }
+
     // Admin opens a target backpack; preview=true -> read-only
     public void openForAdmin(UUID owner, Player admin, boolean preview) {
         Inventory inv = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         // open a new inventory view for admin with same contents
         BackpackInventoryHolder holder = BackpackInventoryHolder.admin(owner, preview);
-        String ownerName = Bukkit.getOfflinePlayer(owner).getName();
+        String ownerName = playerName(owner);
         Component title = messages.component("gui-admin-view-title",
-                "{player}", ownerName != null ? ownerName : owner.toString());
+                "{player}", ownerName);
         Inventory view = Bukkit.createInventory(holder, inv.getSize(), title);
         holder.setInventory(view);
         for (int i = 0; i < inv.getSize(); i++) view.setItem(i, inv.getItem(i));
@@ -607,7 +640,7 @@ public class BackpackManager implements Listener {
      * Wipes the backpack of the given effective owner on behalf of an admin
      * and persists the empty state asynchronously.
      */
-    public void clearForAdmin(UUID ownerId, Player admin) {
+    public void clearForAdmin(UUID ownerId, org.bukkit.command.CommandSender admin) {
         Inventory inv = backpacks.computeIfAbsent(ownerId, u -> loadBackpack(ownerId));
         for (int i = 0; i < inv.getSize(); i++) {
             inv.setItem(i, null);

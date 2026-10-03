@@ -69,8 +69,10 @@ public class Backpack extends JavaPlugin implements Listener {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             Commands registrar = event.registrar();
             registrar.register(new BackpackCommand(this).node(), "Opens your personal backpack", List.of("bp"));
-            registrar.register(new BackpackConfigCommand(this).node(),
-                    "Open the backpack configuration GUI", List.of());
+            if (!settings.classicMode()) {
+                registrar.register(new BackpackConfigCommand(this).node(),
+                        "Open the backpack configuration GUI", List.of());
+            }
             registrar.register(new BackpackReloadCommand(this).node(),
                     "Reloads the SimpleBackpack config", List.of());
             if (settings.teamEnabled() && settings.showTeamCommands() && !settings.classicMode()) {
@@ -83,7 +85,10 @@ public class Backpack extends JavaPlugin implements Listener {
                 registrar.register(new BackpackAdminCommand(this).node(),
                         "Admin commands for SimpleBackpack", List.of());
             }
-            registrar.register(new BackpackShareCommand(this).node(), "Temporarily share your backpack", List.of());
+            if (!settings.classicMode()) {
+                registrar.register(new BackpackShareCommand(this).node(),
+                        "Temporarily share your backpack", List.of());
+            }
         });
     }
 
@@ -127,6 +132,7 @@ public class Backpack extends JavaPlugin implements Listener {
         }
         // Warm the cache so the first open doesn't wait on disk I/O
         Player player = event.getPlayer();
+        manager.refreshPlayerName(player.getUniqueId(), player.getName());
         manager.preloadBackpack(player.getUniqueId());
         manager.preloadBackpack(manager.resolveEffectiveOwner(player.getUniqueId()));
     }
