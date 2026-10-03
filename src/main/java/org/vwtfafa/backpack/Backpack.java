@@ -15,10 +15,10 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Backpack extends JavaPlugin implements Listener {
     static final long INVITE_EXPIRY_MILLIS = 5L * 60L * 1000L;
@@ -29,7 +29,7 @@ public class Backpack extends JavaPlugin implements Listener {
     private Messages messages;
     private PluginSettings settings;
     private final TeamRegistry teamRegistry = new TeamRegistry();
-    private final Map<UUID, TeamInvite> pendingInvites = new HashMap<>();
+    private final Map<UUID, TeamInvite> pendingInvites = new ConcurrentHashMap<>();
     private TeamStorage teamStorage;
     private NamespacedKey firstJoinKey;
 

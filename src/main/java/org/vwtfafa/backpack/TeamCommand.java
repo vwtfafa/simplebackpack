@@ -71,12 +71,12 @@ final class TeamCommand extends SubCommand {
             members.add(targetId);
             plugin.teamRegistry().createTeam(inviterId, members);
         } else {
-            // The team may have filled up between invite and accept
-            if (plugin.teamRegistry().membersOf(owner).size() >= plugin.teamMaxSize()) {
+            // The team may have filled up between invite and accept; the size
+            // check and the join are atomic so parallel accepts stay capped.
+            if (!plugin.teamRegistry().tryAddMember(owner, targetId, plugin.teamMaxSize())) {
                 plugin.messages().send(player, "team-full");
                 return;
             }
-            plugin.teamRegistry().addMember(owner, targetId);
         }
         plugin.saveTeams();
         OfflinePlayer inviterOffline = Bukkit.getOfflinePlayer(inviterId);
