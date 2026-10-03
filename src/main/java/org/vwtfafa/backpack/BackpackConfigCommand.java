@@ -32,6 +32,7 @@ final class BackpackConfigCommand extends SubCommand {
             return;
         }
         if (!plugin.guiConfigurable()) {
+            plugin.messages().send(player, "config-disabled");
             return;
         }
         plugin.manager().openConfigGUI(player);

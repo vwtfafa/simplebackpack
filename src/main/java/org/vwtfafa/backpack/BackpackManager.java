@@ -1,13 +1,24 @@
 package org.vwtfafa.backpack;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickCallback;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import io.papermc.paper.dialog.Dialog;
+import io.papermc.paper.dialog.DialogResponseView;
+import io.papermc.paper.registry.data.dialog.ActionButton;
+import io.papermc.paper.registry.data.dialog.DialogBase;
+import io.papermc.paper.registry.data.dialog.action.DialogAction;
+import io.papermc.paper.registry.data.dialog.input.DialogInput;
+import io.papermc.paper.registry.data.dialog.type.DialogType;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -31,7 +42,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,6 +52,7 @@ import java.nio.file.StandardCopyOption;
 public class BackpackManager implements Listener {
     private static final int MIN_BACKPACK_SIZE = 9;
     private static final int MAX_BACKPACK_SIZE = 54;
+    private static final int MAX_NAME_LENGTH = 64;
     private static final long AUDIT_LOG_MAX_BYTES = 5L * 1024L * 1024L;
     private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
     private static final List<NamedTextColor> TITLE_COLOR_CYCLE =
@@ -55,6 +66,12 @@ public class BackpackManager implements Listener {
     private final File dataFolder;
     private volatile String backpackName;
     private volatile int backpackSize;
+    // Usage policy snapshot (worlds, creative, global toggle): enforced on
+    // open and re-checked when players change world or game mode, so an open
+    // backpack cannot be carried into a restricted context.
+    private volatile boolean usageEnabled = true;
+    private volatile boolean usageAllowCreative;
+    private volatile List<String> usageDisabledWorlds = List.of();
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
     // Owners whose backpack an inventory-close event just persisted; lets the
     // quit-time autosave skip the redundant second write on disconnects
@@ -64,6 +81,12 @@ public class BackpackManager implements Listener {
     // Guards all inventory file writes: prevents interleaved temp-file writes
     // without keeping an ever-growing per-owner lock map
     private final Object saveIoLock = new Object();
+    // Monotonic write sequence per owner: async writes carry the sequence from
+    // scheduling time, so a stale write (e.g. a close-save snapshotted before
+    // a death-clear) is dropped instead of resurrecting deleted items, and the
+    // synchronous shutdown save always wins over still-running async writes.
+    private final Map<UUID, Long> saveSequences = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerNameCache = new ConcurrentHashMap<>();
 
     public BackpackManager(JavaPlugin plugin, Messages messages, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled) {
         this.plugin = plugin;
@@ -75,6 +98,16 @@ public class BackpackManager implements Listener {
         if (!dataFolder.exists() && !dataFolder.mkdirs()) {
             plugin.getLogger().warning("Failed to create backpack data folder: " + dataFolder);
         }
+        // Remove temp files left behind by an interrupted save so they do not
+        // accumulate; the real file was never replaced by them.
+        File[] leftovers = dataFolder.listFiles((dir, name) -> name.endsWith(".yml.tmp"));
+        if (leftovers != null) {
+            for (File leftover : leftovers) {
+                if (leftover.delete()) {
+                    plugin.getLogger().info("Removed leftover temp save file: " + leftover.getName());
+                }
+            }
+        }
         this.auditLogFile = new File(plugin.getDataFolder(), "backpack-audit.log");
         try {
             if (!this.auditLogFile.exists()) this.auditLogFile.createNewFile();
@@ -84,6 +117,11 @@ public class BackpackManager implements Listener {
     }
 
     public void openBackpack(Player player) {
+        String blocked = usageBlockReason(player);
+        if (blocked != null) {
+            messages.send(player, blocked);
+            return;
+        }
         Inventory inv = getBackpack(player);
         player.openInventory(inv);
         if (plugin.getConfig().getBoolean("backpack.open-sound", true)) {
@@ -123,13 +161,7 @@ public class BackpackManager implements Listener {
      * Removes expired shared sessions from the map.
      */
     void cleanupExpiredSessions() {
-        Iterator<Map.Entry<UUID, SharedSession>> it = sharedSessions.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<UUID, SharedSession> entry = it.next();
-            if (entry.getValue().isExpired()) {
-                it.remove();
-            }
-        }
+        sharedSessions.entrySet().removeIf(entry -> entry.getValue().isExpired());
     }
 
     public void updateBackpackGUI(Player player) {
@@ -142,13 +174,29 @@ public class BackpackManager implements Listener {
         // over the resized one (split-brain data loss)
         if (oldInv != null) {
             List<Player> viewers = new ArrayList<>();
+            List<Player> staleAdmins = new ArrayList<>();
             for (Player online : Bukkit.getOnlinePlayers()) {
+                if (!(online.getOpenInventory().getTopInventory().getHolder()
+                        instanceof BackpackInventoryHolder holder)) {
+                    continue;
+                }
                 if (oldInv.equals(online.getOpenInventory().getTopInventory())) {
                     viewers.add(online);
+                } else if (holder.getType() == BackpackInventoryHolder.Type.ADMIN
+                        && effectiveOwner.equals(holder.getOwner())) {
+                    // Admin copies are separate inventories; without closing
+                    // them a later admin save would overwrite the resized one.
+                    staleAdmins.add(online);
                 }
             }
             for (Player viewer : viewers) {
                 viewer.closeInventory();
+            }
+            for (Player admin : staleAdmins) {
+                admin.closeInventory();
+                messages.send(admin, "admin-edit-conflict");
+                logAudit("ADMIN_CONFLICT " + admin.getName() + " -> " + effectiveOwner
+                        + " (backpack resized, stale admin view closed)");
             }
         }
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(effectiveOwner);
@@ -159,17 +207,28 @@ public class BackpackManager implements Listener {
             for (int i = 0; i < keptSlots; i++) {
                 newInv.setItem(i, oldInv.getItem(i));
             }
-            // Hand items from removed slots back to the player so nothing is lost;
-            // anything that no longer fits is dropped instead of vanishing
+            // Hand items from removed slots back so nothing is lost. The owner
+            // receives them when online; otherwise they go to the overflow
+            // sidecar instead of a random clicking team member.
+            Player ownerPlayer = Bukkit.getPlayer(effectiveOwner);
+            List<ItemStack> homeless = new ArrayList<>();
             for (int i = keptSlots; i < oldInv.getSize(); i++) {
                 ItemStack item = oldInv.getItem(i);
                 if (item == null || item.getType().isAir()) {
                     continue;
                 }
-                Map<Integer, ItemStack> leftover = player.getInventory().addItem(item);
-                for (ItemStack rest : leftover.values()) {
-                    player.getWorld().dropItemNaturally(player.getLocation(), rest);
+                if (ownerPlayer != null) {
+                    Map<Integer, ItemStack> leftover =
+                            ownerPlayer.getInventory().addItem(item);
+                    for (ItemStack rest : leftover.values()) {
+                        ownerPlayer.getWorld().dropItemNaturally(ownerPlayer.getLocation(), rest);
+                    }
+                } else {
+                    homeless.add(item);
                 }
+            }
+            if (!homeless.isEmpty()) {
+                storeOverflow(effectiveOwner, homeless);
             }
         }
         backpacks.put(effectiveOwner, newInv);
@@ -197,8 +256,12 @@ public class BackpackManager implements Listener {
         if (overflow.isEmpty()) {
             return true;
         }
+        // Removed slots must fit the owner's storage, not necessarily the
+        // clicking player's (team/shared backpacks resolve to another owner).
+        Player owner = Bukkit.getPlayer(effectiveOwner);
+        Player storage = owner != null ? owner : player;
         int freeSlots = 0;
-        for (ItemStack content : player.getInventory().getStorageContents()) {
+        for (ItemStack content : storage.getInventory().getStorageContents()) {
             if (content == null || content.getType().isAir()) {
                 freeSlots++;
             }
@@ -302,36 +365,116 @@ public class BackpackManager implements Listener {
                 overflow.add(item);
             }
         }
-        if (overflow.isEmpty()) {
-            return inv;
-        }
-        Map<Integer, ItemStack> leftover = inv.addItem(overflow.toArray(new ItemStack[0]));
+        Map<Integer, ItemStack> leftover = overflow.isEmpty()
+                ? Map.of()
+                : inv.addItem(overflow.toArray(new ItemStack[0]));
         if (!leftover.isEmpty()) {
             storeOverflow(uuid, leftover.values());
+            return inv;
         }
+        // Nothing homeless from the main file: drain a previous sidecar now
+        // that space may have freed up (e.g. size was increased again).
+        restoreOverflow(uuid, inv);
         return inv;
     }
 
     /**
+     * Re-ingests a previously written {@code *.overflow.yml} sidecar into a
+     * freshly loaded backpack. Items that fit are restored, the sidecar is
+     * deleted only when fully drained; anything still not fitting is kept in
+     * a rewritten sidecar so repeated shrinks never silently eat items.
+     */
+    private void restoreOverflow(UUID uuid, Inventory inv) {
+        File sidecar = new File(dataFolder, uuid + ".overflow.yml");
+        if (!sidecar.exists()) {
+            return;
+        }
+        YamlConfiguration saved = YamlConfiguration.loadConfiguration(sidecar);
+        List<ItemStack> stored = new ArrayList<>();
+        for (int i = 0; ; i++) {
+            ItemStack item = saved.getItemStack("slot" + i);
+            if (item == null) {
+                break;
+            }
+            if (!item.getType().isAir()) {
+                stored.add(item);
+            }
+        }
+        if (stored.isEmpty()) {
+            if (sidecar.delete()) {
+                plugin.getLogger().info("Removed empty overflow file for backpack " + uuid + ".");
+            }
+            return;
+        }
+        Map<Integer, ItemStack> rest = inv.addItem(stored.toArray(new ItemStack[0]));
+        if (rest.isEmpty()) {
+            if (sidecar.delete()) {
+                plugin.getLogger().info("Restored %s overflow item(s) into backpack %s."
+                        .formatted(stored.size(), uuid));
+                logAudit("OVERFLOW_RESTORED " + uuid + " (" + stored.size() + " items)");
+            }
+            return;
+        }
+        Player ownerPlayer = Bukkit.getPlayer(uuid);
+        if (ownerPlayer != null) {
+            messages.send(ownerPlayer, "backpack-full", "{size}", String.valueOf(rest.size()));
+        }
+        YamlConfiguration rewritten = new YamlConfiguration();
+        int slot = 0;
+        for (ItemStack item : rest.values()) {
+            rewritten.set("slot" + slot++, item);
+        }
+        try {
+            rewritten.save(sidecar);
+            plugin.getLogger().warning("Restored %s overflow item(s) into backpack %s; %s item(s) remain in %s."
+                    .formatted(stored.size() - rest.size(), uuid, rest.size(), sidecar.getName()));
+        } catch (IOException e) {
+            plugin.getLogger().severe("Failed to rewrite overflow file for backpack %s: %s"
+                    .formatted(uuid, e.getMessage()));
+        }
+    }
+
+    /**
      * Persists items that no longer fit into a shrunken backpack in a sidecar
-     * file so they can be recovered manually instead of being lost.
+     * file so they can be recovered instead of being lost. Existing sidecar
+     * contents are merged, never overwritten.
      */
     private void storeOverflow(UUID owner, Collection<ItemStack> items) {
+        List<ItemStack> fresh = new ArrayList<>();
+        for (ItemStack item : items) {
+            if (item != null && !item.getType().isAir()) {
+                fresh.add(item);
+            }
+        }
+        if (fresh.isEmpty()) {
+            return;
+        }
         File overflowFile = new File(dataFolder, owner + ".overflow.yml");
         YamlConfiguration overflowConfig = new YamlConfiguration();
         int slot = 0;
-        for (ItemStack item : items) {
+        if (overflowFile.exists()) {
+            YamlConfiguration existing = YamlConfiguration.loadConfiguration(overflowFile);
+            while (true) {
+                ItemStack kept = existing.getItemStack("slot" + slot);
+                if (kept == null) {
+                    break;
+                }
+                overflowConfig.set("slot" + slot, kept);
+                slot++;
+            }
+        }
+        for (ItemStack item : fresh) {
             overflowConfig.set("slot" + slot++, item);
         }
         try {
             overflowConfig.save(overflowFile);
-            plugin.getLogger().warning("Backpack " + owner + " shrank below its stored contents; "
-                    + items.size() + " item(s) saved to " + overflowFile.getName());
+            plugin.getLogger().warning("Backpack %s shrank below its stored contents; %s item(s) saved to %s."
+                    .formatted(owner, items.size(), overflowFile.getName()));
             logAudit("OVERFLOW " + owner.toString() + " -> " + overflowFile.getName()
                     + " (" + items.size() + " items)");
         } catch (IOException e) {
-            plugin.getLogger().severe("Failed to store overflowing backpack contents of "
-                    + owner + ": " + e.getMessage());
+            plugin.getLogger().severe("Failed to store overflowing backpack contents of %s: %s"
+                    .formatted(owner, e.getMessage()));
         }
     }
 
@@ -359,7 +502,7 @@ public class BackpackManager implements Listener {
     public void saveAllBackpacks() {
         for (UUID uuid : new HashSet<>(backpacks.keySet())) {
             Inventory inv = backpacks.get(uuid);
-            if (inv != null) writeInventory(uuid, snapshot(inv), "shutdown");
+            if (inv != null) writeInventory(uuid, snapshot(inv), "shutdown", nextSaveSequence(uuid));
         }
     }
 
@@ -421,14 +564,42 @@ public class BackpackManager implements Listener {
         return backpackSize;
     }
 
+    /**
+     * Resolves a player name with a small in-memory cache so team info and
+     * the admin GUI do not hit the offline-player store dozens of times per
+     * page. Never returns null: unknown players fall back to their UUID.
+     * Refreshed on every player join.
+     */
+    public String playerName(UUID uuid) {
+        String cached = playerNameCache.get(uuid);
+        if (cached != null) {
+            return cached;
+        }
+        String name = Bukkit.getOfflinePlayer(uuid).getName();
+        if (name == null) {
+            return uuid.toString();
+        }
+        playerNameCache.put(uuid, name);
+        return name;
+    }
+
+    /**
+     * Refreshes a cached player name, e.g. after a rename.
+     */
+    public void refreshPlayerName(UUID uuid, String name) {
+        if (name != null) {
+            playerNameCache.put(uuid, name);
+        }
+    }
+
     // Admin opens a target backpack; preview=true -> read-only
     public void openForAdmin(UUID owner, Player admin, boolean preview) {
         Inventory inv = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
         // open a new inventory view for admin with same contents
         BackpackInventoryHolder holder = BackpackInventoryHolder.admin(owner, preview);
-        String ownerName = Bukkit.getOfflinePlayer(owner).getName();
+        String ownerName = playerName(owner);
         Component title = messages.component("gui-admin-view-title",
-                "{player}", ownerName != null ? ownerName : owner.toString());
+                "{player}", ownerName);
         Inventory view = Bukkit.createInventory(holder, inv.getSize(), title);
         holder.setInventory(view);
         for (int i = 0; i < inv.getSize(); i++) view.setItem(i, inv.getItem(i));
@@ -436,11 +607,19 @@ public class BackpackManager implements Listener {
         logAudit("ADMIN_OPEN " + admin.getName() + " -> " + owner.toString() + " preview=" + preview);
     }
 
-    // Share a backpack temporarily: target can view owner's backpack until expiryMillis since now
-    public void shareBackpack(UUID owner, UUID target, long durationMillis) {
-        long expiry = System.currentTimeMillis() + durationMillis;
+    // Share a backpack temporarily: target can view owner's backpack until expiryMillis since now.
+    // Returns false when the share was rejected (self-share or non-positive
+    // duration); the duration is clamped to one minute .. seven days so direct
+    // callers cannot create permanent or overflowing sessions.
+    public boolean shareBackpack(UUID owner, UUID target, long durationMillis) {
+        if (owner.equals(target)) {
+            return false;
+        }
+        long clamped = Math.min(Math.max(durationMillis, 60_000L), 7L * 24L * 60L * 60_000L);
+        long expiry = System.currentTimeMillis() + clamped;
         sharedSessions.put(target, new SharedSession(owner, expiry));
         logAudit("SHARE " + owner.toString() + " -> " + target.toString() + " until=" + expiry);
+        return true;
     }
 
 
@@ -462,7 +641,7 @@ public class BackpackManager implements Listener {
      * Wipes the backpack of the given effective owner on behalf of an admin
      * and persists the empty state asynchronously.
      */
-    public void clearForAdmin(UUID ownerId, Player admin) {
+    public void clearForAdmin(UUID ownerId, org.bukkit.command.CommandSender admin) {
         Inventory inv = backpacks.computeIfAbsent(ownerId, u -> loadBackpack(ownerId));
         for (int i = 0; i < inv.getSize(); i++) {
             inv.setItem(i, null);
@@ -472,12 +651,80 @@ public class BackpackManager implements Listener {
     }
 
     public void setConfig(String backpackName, int backpackSize, boolean teamEnabled) {
-        this.backpackName = backpackName;
-        this.backpackSize = backpackSize;
+        if (backpackName != null && !backpackName.isBlank()) {
+            this.backpackName = backpackName;
+        } else {
+            plugin.getLogger().warning("Ignoring invalid backpack name from config reload; keeping previous value.");
+        }
+        this.backpackSize = validateBackpackSize(backpackSize);
         this.teamEnabled = teamEnabled;
     }
 
+    /**
+     * Refreshes the usage policy snapshot (global toggle, creative mode,
+     * disabled worlds) after (re)loads; callers pass the already validated
+     * {@link PluginSettings} values.
+     */
+    public void setUsagePolicy(boolean enabled, boolean allowInCreative, List<String> disabledWorlds) {
+        this.usageEnabled = enabled;
+        this.usageAllowCreative = allowInCreative;
+        this.usageDisabledWorlds = disabledWorlds != null ? List.copyOf(disabledWorlds) : List.of();
+    }
+
+    /**
+     * Returns the message key explaining why the player may not use their
+     * backpack right now, or null when usage is allowed.
+     */
+    private String usageBlockReason(Player player) {
+        return usageBlockReason(player, player.getGameMode());
+    }
+
+    private String usageBlockReason(Player player, GameMode gameMode) {
+        if (!usageEnabled) {
+            return "backpacks-disabled";
+        }
+        if (usageDisabledWorlds.contains(player.getWorld().getName())) {
+            return "not-allowed-world";
+        }
+        if (!usageAllowCreative && gameMode == GameMode.CREATIVE) {
+            return "creative-not-allowed";
+        }
+        return null;
+    }
+
+    /**
+     * Closes an open backpack view that just became illegal (world change or
+     * game mode change) and tells the player why.
+     */
+    private void enforceUsagePolicy(Player player, GameMode gameMode) {
+        if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)
+                || holder.getType() != BackpackInventoryHolder.Type.BACKPACK) {
+            return;
+        }
+        String blocked = usageBlockReason(player, gameMode);
+        if (blocked != null) {
+            player.closeInventory();
+            messages.send(player, blocked);
+        }
+    }
+
+    @org.bukkit.event.EventHandler
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        enforceUsagePolicy(event.getPlayer(), event.getPlayer().getGameMode());
+    }
+
+    @org.bukkit.event.EventHandler
+    public void onPlayerGameModeChange(PlayerGameModeChangeEvent event) {
+        // The event fires before the change applies, so check the new mode.
+        enforceUsagePolicy(event.getPlayer(), event.getNewGameMode());
+    }
+
     public void openConfigGUI(Player player) {
+        String blocked = usageBlockReason(player);
+        if (blocked != null) {
+            messages.send(player, blocked);
+            return;
+        }
         BackpackInventoryHolder holder = BackpackInventoryHolder.config();
         Inventory gui = Bukkit.createInventory(holder, 9, messages.component("gui-config-title"));
         holder.setInventory(gui);
@@ -505,34 +752,34 @@ public class BackpackManager implements Listener {
                 return;
             }
             switch (event.getSlot()) {
-                case 0:
-                    // Name ändern (Dialog oder Standard)
-                    this.backpackName = MINI_MESSAGE.serialize(messages.component("gui-default-backpack-name"));
-                    saveConfigValue("backpack.name", this.backpackName);
-                    updateBackpackGUI(player);
-                    messages.send(player, "config-changed-name");
-                    break;
-                case 1:
+                case 0 -> {
+                    // Rename via dialog text input; the dialog replaces the
+                    // inventory screen, so skip the trailing closeInventory
+                    openNameDialog(player);
+                    return;
+                }
+                case 1 -> {
                     // Farbe ändern (cycle: Aqua -> Green -> Red -> Aqua ...)
                     this.backpackName = cycleColor(this.backpackName);
                     saveConfigValue("backpack.name", this.backpackName);
                     updateBackpackGUI(player);
                     messages.send(player, "config-changed-color");
-                    break;
-                case 2:
+                }
+                case 2 -> {
                     // Größe ändern (cycle)
                     int newSize = (this.backpackSize == MAX_BACKPACK_SIZE)
                         ? MIN_BACKPACK_SIZE
                         : this.backpackSize + MIN_BACKPACK_SIZE;
-                    if (!canShrinkSafely(player, validateBackpackSize(newSize))) {
+                    if (canShrinkSafely(player, validateBackpackSize(newSize))) {
+                        this.backpackSize = validateBackpackSize(newSize);
+                        saveConfigValue("backpack.size", this.backpackSize);
+                        updateBackpackGUI(player);
+                        messages.send(player, "config-changed-size");
+                    } else {
                         messages.send(player, "resize-no-space");
-                        break;
                     }
-                    this.backpackSize = validateBackpackSize(newSize);
-                    saveConfigValue("backpack.size", this.backpackSize);
-                    updateBackpackGUI(player);
-                    messages.send(player, "config-changed-size");
-                    break;
+                }
+                default -> { }
             }
             player.closeInventory();
         }
@@ -592,7 +839,9 @@ public class BackpackManager implements Listener {
 
     @org.bukkit.event.EventHandler
     public void onInventoryCloseEvent(InventoryCloseEvent event) {
-        Player viewer = (Player) event.getPlayer();
+        if (!(event.getPlayer() instanceof Player viewer)) {
+            return;
+        }
         if (!(event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)) return;
         if (holder.getType() == BackpackInventoryHolder.Type.CONFIG || holder.isPreview()) return;
         // If admin was editing a "Backpack: <uuid>" view, persist changes
@@ -609,6 +858,15 @@ public class BackpackManager implements Listener {
                 Inventory top = event.getInventory();
                 // apply contents back to owner's stored backpack
                 Inventory stored = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
+                if (stored.getSize() != top.getSize()) {
+                    // The backpack was resized while the admin view was open;
+                    // a partial copy would silently drop or resurrect slots.
+                    messages.send(viewer, "admin-edit-conflict");
+                    logAudit("ADMIN_CONFLICT " + viewer.getName() + " -> " + owner.toString()
+                            + " (size changed from " + top.getSize() + " to "
+                            + stored.getSize() + ", changes discarded)");
+                    return;
+                }
                 for (int i = 0; i < Math.min(stored.getSize(), top.getSize()); i++) {
                     stored.setItem(i, top.getItem(i));
                 }
@@ -695,9 +953,10 @@ public class BackpackManager implements Listener {
     private void saveInventoryAsync(UUID owner, ItemStack[] contents, String source, Runnable onComplete) {
         // The contents were snapshotted synchronously by the caller, so the
         // async write never races inventory mutations
+        long sequence = nextSaveSequence(owner);
         plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
             try {
-                writeInventory(owner, contents, source);
+                writeInventory(owner, contents, source, sequence);
             } catch (RuntimeException e) {
                 plugin.getLogger().log(java.util.logging.Level.SEVERE,
                         "Failed to save backpack " + owner + " from " + source, e);
@@ -705,6 +964,10 @@ public class BackpackManager implements Listener {
                 runOnMainThread(onComplete);
             }
         });
+    }
+
+    private long nextSaveSequence(UUID owner) {
+        return saveSequences.merge(owner, 1L, Long::sum);
     }
 
     /**
@@ -719,8 +982,14 @@ public class BackpackManager implements Listener {
         plugin.getServer().getGlobalRegionScheduler().run(plugin, task -> callback.run());
     }
 
-    private void writeInventory(UUID owner, ItemStack[] contents, String source) {
+    private void writeInventory(UUID owner, ItemStack[] contents, String source, long sequence) {
         synchronized (saveIoLock) {
+            Long latest = saveSequences.get(owner);
+            if (latest != null && sequence < latest) {
+                plugin.getLogger().fine("Skipping stale " + source + " save for backpack " + owner
+                        + " (sequence " + sequence + " < " + latest + ").");
+                return;
+            }
             File file = new File(dataFolder, owner + ".yml");
             File temporaryFile = new File(dataFolder, owner + ".yml.tmp");
             try {
@@ -733,11 +1002,58 @@ public class BackpackManager implements Listener {
                 } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
                     Files.move(temporaryFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 }
+                saveSequences.put(owner, sequence);
             } catch (IOException e) {
                 plugin.getLogger().log(java.util.logging.Level.SEVERE,
                         "Failed to save backpack " + owner + " from " + source, e);
             }
         }
+    }
+
+    /**
+     * Opens a dialog with a text input for the backpack name, prefilled with
+     * the current plain-text title so MiniMessage tags are not exposed raw.
+     */
+    private void openNameDialog(Player player) {
+        String plainCurrent =
+                PlainTextComponentSerializer.plainText().serialize(Messages.deserialize(backpackName));
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(messages.component("gui-dialog-name-title"))
+                        .inputs(List.of(DialogInput.text("name", 200,
+                                messages.component("gui-dialog-name-label"), false,
+                                plainCurrent, MAX_NAME_LENGTH, null)))
+                        .build())
+                .type(DialogType.confirmation(
+                        ActionButton.create(messages.component("gui-dialog-confirm"), null, 100,
+                                DialogAction.customClick(
+                                        (response, audience) -> applyDialogName(player, response),
+                                        ClickCallback.Options.builder().uses(1).build())),
+                        ActionButton.create(messages.component("gui-dialog-cancel"), null, 100, null))));
+        player.closeInventory();
+        player.showDialog(dialog);
+    }
+
+    /**
+     * Applies a confirmed dialog name: blank input is rejected, anything else
+     * is stored raw (MiniMessage and legacy colors keep working in titles).
+     */
+    private void applyDialogName(Player player, DialogResponseView response) {
+        if (!player.isOnline()) {
+            return;
+        }
+        String input = response == null ? null : response.getText("name");
+        if (input == null || input.isBlank()) {
+            messages.send(player, "config-invalid-name");
+            return;
+        }
+        String name = input.strip();
+        if (name.length() > MAX_NAME_LENGTH) {
+            name = name.substring(0, MAX_NAME_LENGTH);
+        }
+        this.backpackName = name;
+        saveConfigValue("backpack.name", this.backpackName);
+        updateBackpackGUI(player);
+        messages.send(player, "config-changed-name");
     }
 
     /**

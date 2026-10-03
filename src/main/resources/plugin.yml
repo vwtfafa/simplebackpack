@@ -44,8 +44,11 @@ description: >
     - /backpackreload — Reload plugin configuration
     - /invite <player> — Invite player to your team
     - /team — Show your team members
+    - /team accept — Accept a team invitation
     - /leave — Leave your team
     - /backpackadmin gui — Open admin overview GUI
+    - /backpackadmin clear <player> — Wipe a player's backpack
+    - /backpackadmin enable|disable — Toggle backpacks globally
     - /backpackshare <player> [minutes] — Temporarily share your backpack
 
   Permissions (defaults shown):

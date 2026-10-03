@@ -15,10 +15,10 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Backpack extends JavaPlugin implements Listener {
     static final long INVITE_EXPIRY_MILLIS = 5L * 60L * 1000L;
@@ -29,7 +29,7 @@ public class Backpack extends JavaPlugin implements Listener {
     private Messages messages;
     private PluginSettings settings;
     private final TeamRegistry teamRegistry = new TeamRegistry();
-    private final Map<UUID, TeamInvite> pendingInvites = new HashMap<>();
+    private final Map<UUID, TeamInvite> pendingInvites = new ConcurrentHashMap<>();
     private TeamStorage teamStorage;
     private NamespacedKey firstJoinKey;
 
@@ -51,6 +51,8 @@ public class Backpack extends JavaPlugin implements Listener {
         getLogger().info("bStats metrics enabled (ID: " + BSTATS_PLUGIN_ID + ")");
         manager = new BackpackManager(this, messages, settings.backpackName(), settings.backpackSize(),
                 teamRegistry, settings.teamEnabled());
+        manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
+                settings.disabledWorlds());
         getServer().getPluginManager().registerEvents(this, this);
         registerCommands();
         if (settings.adminEnabled() && settings.adminGuiEnabled()) {
@@ -67,8 +69,10 @@ public class Backpack extends JavaPlugin implements Listener {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             Commands registrar = event.registrar();
             registrar.register(new BackpackCommand(this).node(), "Opens your personal backpack", List.of("bp"));
-            registrar.register(new BackpackConfigCommand(this).node(),
-                    "Open the backpack configuration GUI", List.of());
+            if (!settings.classicMode()) {
+                registrar.register(new BackpackConfigCommand(this).node(),
+                        "Open the backpack configuration GUI", List.of());
+            }
             registrar.register(new BackpackReloadCommand(this).node(),
                     "Reloads the SimpleBackpack config", List.of());
             if (settings.teamEnabled() && settings.showTeamCommands() && !settings.classicMode()) {
@@ -81,7 +85,10 @@ public class Backpack extends JavaPlugin implements Listener {
                 registrar.register(new BackpackAdminCommand(this).node(),
                         "Admin commands for SimpleBackpack", List.of());
             }
-            registrar.register(new BackpackShareCommand(this).node(), "Temporarily share your backpack", List.of());
+            if (!settings.classicMode()) {
+                registrar.register(new BackpackShareCommand(this).node(),
+                        "Temporarily share your backpack", List.of());
+            }
         });
     }
 
@@ -98,6 +105,8 @@ public class Backpack extends JavaPlugin implements Listener {
         loadConfigOptions();
         manager.setConfig(settings.backpackName(), settings.backpackSize(),
                 settings.teamEnabled());
+        manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
+                settings.disabledWorlds());
     }
 
     @EventHandler
@@ -123,6 +132,7 @@ public class Backpack extends JavaPlugin implements Listener {
         }
         // Warm the cache so the first open doesn't wait on disk I/O
         Player player = event.getPlayer();
+        manager.refreshPlayerName(player.getUniqueId(), player.getName());
         manager.preloadBackpack(player.getUniqueId());
         manager.preloadBackpack(manager.resolveEffectiveOwner(player.getUniqueId()));
     }
@@ -181,6 +191,10 @@ public class Backpack extends JavaPlugin implements Listener {
         settings.setBackpacksEnabled(enabled);
         getConfig().set("backpacks-enabled", enabled);
         saveConfig();
+        if (manager != null) {
+            manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
+                    settings.disabledWorlds());
+        }
     }
 
     boolean allowInCreative() {

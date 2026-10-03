@@ -1,5 +1,34 @@
 # Changelog
 
+## 7.2 - 2026-10-03
+
+### Changed
+- Updated Paper to `26.3.build.143-beta` (compile and test dependency, latest BETA build 143 from 2026-10-02) and `runServer` to `26.3` (`api-version: 26.3` unchanged).
+- Synced with `origin/beta` (already merged upstream): JUnit Jupiter `5.10.0` → `6.1.3`, JUnit Platform Launcher `1.10.0` → `6.1.3`, SpotBugs plugin `6.5.10` → `6.5.11`, `actions/setup-java` → `v6` and `actions/checkout` → `v7` in the release workflow.
+- Merged open Dependabot PRs: `actions/checkout` `v4` → `v7`, `actions/setup-java` `v4` → `v6` and `gradle/actions` (`wrapper-validation`, `setup-gradle`) `v4` → `v6` in the build workflow.
+- Bumped `com.google.code.gson:gson` from `2.11.0` to `2.14.0` (matches the Paper API dependency).
+- Bumped Gradle wrapper from `9.7.1` to `9.8.0` (`gradle-wrapper.jar`, `gradle-wrapper.properties`, `gradlew.bat`).
+- Bumped plugin version to 7.2.
+
+### Fixed
+- Hardened message handling: `deserialize` no longer throws on null or malformed MiniMessage (falls back to empty/plain text), unknown lang keys are logged instead of failing silently, and legacy `messages` migration no longer deletes unmigrated sections.
+- Invalid `backpack.size` values are rejected at load/reload with a warning and fall back to 27 instead of crashing inventory creation; blank `backpack.name` falls back to the default.
+- Update checker no longer dies silently on non-JSON GitHub responses and compares pre-release versions (`-beta`, `-SNAPSHOT`, `-pre-2`) correctly.
+- Overflow sidecars merge instead of overwriting and are restored on load; resize hands items to the backpack owner (or the sidecar when offline) and closes stale admin views; admin saves with a changed size are discarded instead of partially written.
+- Death-clears can no longer be undone by an in-flight close-save and shutdown saves win over pending async writes (per-owner write sequences); leftover `.yml.tmp` files are cleaned up on start.
+- `teams.yml` is written atomically with a `.bak` backup; a single bad UUID no longer discards a whole team.
+- Usage policy (`backpacks-enabled`, `disabled-worlds`, `allow-in-creative`) is enforced on open and re-checked on world/game-mode change; `/team accept` no longer pulls members out of other teams; `/backpackshare` rejects self-shares and clamps durations.
+- Team state is thread-safe (concurrent maps, snapshot reads, atomic capped joins); `pendingInvites` no longer risks `ConcurrentModificationException`.
+- Classic mode now also hides `/backpackconfig` and `/backpackshare` as documented; disabled reload/config/sharing report a dedicated message; `/backpackadmin clear` works from console; implemented the documented `backpack-full` message (sent when overflow remains); `plugin.yml` lists all commands; player names are cached with join-time refresh.
+- New tests: `TeamRegistry` (moves, succession, caps, snapshot isolation), `TeamStorage` (round-trip, corrupt entries), `Messages.deserialize`, `PluginSettings` sanitizers and `UpdateChecker` edge cases.
+- The backpack name is now entered through a Paper dialog text input instead of resetting to the default; blank input is rejected with a dedicated message.
+- Message placeholders resolve through MiniMessage `TagResolver`, so player names containing `<...>` can no longer inject formatting; legacy `§` templates behave as before.
+- Code modernization: pattern-matching `instanceof`, arrow `switch`, `removeIf`, `String.join`, streams and `.formatted()` logging; `TeamRegistry.membersOf` returns an empty set instead of null.
+
+### Verification
+- `./gradlew build --no-daemon` passes after every update: compilation, JUnit tests, Checkstyle and SpotBugs.
+- Paper API usage verified against the `26.3.build.143-beta` Javadocs; `run-paper` plugin stays at `3.1.0` (latest).
+
 ## 7.1 - 2026-09-13
 
 ### Changed

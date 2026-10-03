@@ -29,6 +29,7 @@ final class BackpackReloadCommand extends SubCommand {
     private void execute(CommandSourceStack source) {
         CommandSender sender = source.getSender();
         if (!plugin.liveConfigReload()) {
+            plugin.messages().send(sender, "reload-disabled");
             return;
         }
         plugin.reloadConfiguration();

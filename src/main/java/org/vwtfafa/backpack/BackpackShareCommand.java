@@ -51,11 +51,14 @@ final class BackpackShareCommand extends SubCommand {
             return;
         }
         if (!plugin.sharingEnabled()) {
-            plugin.messages().send(player, "no-permission");
+            plugin.messages().send(player, "sharing-disabled");
             return;
         }
-        plugin.manager().shareBackpack(player.getUniqueId(), target.getUniqueId(),
-                durationMinutes * MILLIS_PER_MINUTE);
+        if (!plugin.manager().shareBackpack(player.getUniqueId(), target.getUniqueId(),
+                durationMinutes * MILLIS_PER_MINUTE)) {
+            plugin.messages().send(player, "share-self");
+            return;
+        }
         plugin.messages().send(player, "share-success", "{player}", target.getName());
         plugin.messages().send(target, "share-received", "{player}", player.getName());
     }
