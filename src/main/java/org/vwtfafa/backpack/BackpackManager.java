@@ -472,8 +472,12 @@ public class BackpackManager implements Listener {
     }
 
     public void setConfig(String backpackName, int backpackSize, boolean teamEnabled) {
-        this.backpackName = backpackName;
-        this.backpackSize = backpackSize;
+        if (backpackName != null && !backpackName.isBlank()) {
+            this.backpackName = backpackName;
+        } else {
+            plugin.getLogger().warning("Ignoring invalid backpack name from config reload; keeping previous value.");
+        }
+        this.backpackSize = validateBackpackSize(backpackSize);
         this.teamEnabled = teamEnabled;
     }
 

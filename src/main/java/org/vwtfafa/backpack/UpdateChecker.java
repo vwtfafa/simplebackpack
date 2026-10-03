@@ -71,13 +71,25 @@ public class UpdateChecker {
                     Thread.currentThread().interrupt();
                 }
                 plugin.getLogger().warning("Update-Check fehlgeschlagen: " + e.getMessage());
+            } catch (RuntimeException e) {
+                plugin.getLogger().warning("Update-Check fehlgeschlagen (unerwartete Antwort): " + e.getMessage());
             }
         });
     }
 
     private void parseRelease(String body) {
-        JsonObject json = JsonParser.parseString(body).getAsJsonObject();
-        if (!json.has("tag_name")) {
+        if (body == null || body.isBlank()) {
+            plugin.getLogger().warning("Update-Check fehlgeschlagen: leere Antwort von GitHub.");
+            return;
+        }
+        JsonObject json;
+        try {
+            json = JsonParser.parseString(body).getAsJsonObject();
+        } catch (RuntimeException e) {
+            plugin.getLogger().warning("Update-Check fehlgeschlagen: Antwort ist kein JSON (" + e.getMessage() + ").");
+            return;
+        }
+        if (!json.has("tag_name") || json.get("tag_name").isJsonNull()) {
             return;
         }
         latestVersion = json.get("tag_name").getAsString();
@@ -119,28 +131,66 @@ public class UpdateChecker {
     }
 
     /**
-     * Compares two version strings
+     * Compares two version strings segment by segment. Only leading digits
+     * of each segment count numerically, so qualifiers like {@code -beta},
+     * {@code -SNAPSHOT} or {@code -pre-2} never throw and never report a
+     * pre-release as newer than its release. A leading {@code v} and
+     * surrounding whitespace are ignored; null or blank input is never newer.
      */
     static boolean isNewerVersion(String newVersion, String currentVersion) {
-        try {
-            // Remove 'v' prefix if present
-            newVersion = newVersion.replaceFirst("^v", "");
-            currentVersion = currentVersion.replaceFirst("^v", "");
-
-            String[] newParts = newVersion.split("\\.");
-            String[] currentParts = currentVersion.split("\\.");
-
-            for (int i = 0; i < Math.max(newParts.length, currentParts.length); i++) {
-                int newNum = i < newParts.length ? Integer.parseInt(newParts[i]) : 0;
-                int currentNum = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0;
-
-                if (newNum > currentNum) return true;
-                if (newNum < currentNum) return false;
-            }
-            return false;
-        } catch (Exception e) {
+        if (newVersion == null || currentVersion == null) {
             return false;
         }
+        String n = newVersion.trim().replaceFirst("^v", "").trim();
+        String c = currentVersion.trim().replaceFirst("^v", "").trim();
+        if (n.isEmpty() || c.isEmpty() || n.equalsIgnoreCase(c)) {
+            return false;
+        }
+        String[] newParts = n.split("[.\\-+]");
+        String[] currentParts = c.split("[.\\-+]");
+        for (int i = 0; i < Math.max(newParts.length, currentParts.length); i++) {
+            String newPart = i < newParts.length ? newParts[i] : "";
+            String currentPart = i < currentParts.length ? currentParts[i] : "";
+            int newNum = leadingNumber(newPart);
+            int currentNum = leadingNumber(currentPart);
+            if (newNum != currentNum) {
+                return newNum > currentNum;
+            }
+            boolean newQualifier = hasQualifier(newPart);
+            boolean currentQualifier = hasQualifier(currentPart);
+            if (newQualifier != currentQualifier) {
+                // The variant without qualifier (the release) is newer.
+                return currentQualifier;
+            }
+        }
+        return false;
+    }
+
+    private static int leadingNumber(String part) {
+        int end = 0;
+        while (end < part.length() && Character.isDigit(part.charAt(end))) {
+            end++;
+        }
+        if (end == 0) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(part.substring(0, end));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static boolean hasQualifier(String part) {
+        if (part.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < part.length(); i++) {
+            if (!Character.isDigit(part.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean isUpdateAvailable() {
