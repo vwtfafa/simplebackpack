@@ -4,6 +4,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * Snapshot of all configuration options, rebuilt by {@link #load} whenever
@@ -53,8 +54,9 @@ final class PluginSettings {
         settings.guiConfigurable = config.getBoolean("backpack.gui-configurable", true);
         settings.sharingEnabled = config.getBoolean("enable-sharing", true);
         settings.teamMaxSize = Math.max(2, config.getInt("team.max-size", 5));
-        settings.backpackName = sanitizeBackpackName(plugin, config.getString("backpack.name", settings.backpackName));
-        settings.backpackSize = sanitizeBackpackSize(plugin, config.getInt("backpack.size", settings.backpackSize));
+        Logger logger = plugin.getLogger();
+        settings.backpackName = sanitizeBackpackName(logger, config.getString("backpack.name", settings.backpackName));
+        settings.backpackSize = sanitizeBackpackSize(logger, config.getInt("backpack.size", settings.backpackSize));
         settings.disabledWorlds = List.copyOf(config.getStringList("backpack.disabled-worlds"));
         return settings;
     }
@@ -64,11 +66,11 @@ final class PluginSettings {
      * time so a bad {@code backpack.name} fails loudly on reload instead of
      * later inside Bukkit/Adventure calls.
      */
-    static String sanitizeBackpackName(JavaPlugin plugin, String name) {
+    static String sanitizeBackpackName(Logger logger, String name) {
         if (name != null && !name.isBlank()) {
             return name;
         }
-        plugin.getLogger().warning("Invalid backpack.name in config.yml; falling back to '"
+        logger.warning("Invalid backpack.name in config.yml; falling back to '"
                 + DEFAULT_BACKPACK_NAME + "'.");
         return DEFAULT_BACKPACK_NAME;
     }
@@ -77,11 +79,11 @@ final class PluginSettings {
      * Accepts only real inventory sizes (9-54 in steps of 9); anything else
      * falls back to the default instead of crashing {@code createInventory}.
      */
-    static int sanitizeBackpackSize(JavaPlugin plugin, int size) {
+    static int sanitizeBackpackSize(Logger logger, int size) {
         if (size >= 9 && size <= 54 && size % 9 == 0) {
             return size;
         }
-        plugin.getLogger().warning("Invalid backpack.size '" + size
+        logger.warning("Invalid backpack.size '" + size
                 + "' in config.yml; expected one of 9, 18, 27, 36, 45, 54. Falling back to "
                 + DEFAULT_BACKPACK_SIZE + ".");
         return DEFAULT_BACKPACK_SIZE;
