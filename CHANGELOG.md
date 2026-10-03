@@ -21,6 +21,9 @@
 - Team state is thread-safe (concurrent maps, snapshot reads, atomic capped joins); `pendingInvites` no longer risks `ConcurrentModificationException`.
 - Classic mode now also hides `/backpackconfig` and `/backpackshare` as documented; disabled reload/config/sharing report a dedicated message; `/backpackadmin clear` works from console; implemented the documented `backpack-full` message (sent when overflow remains); `plugin.yml` lists all commands; player names are cached with join-time refresh.
 - New tests: `TeamRegistry` (moves, succession, caps, snapshot isolation), `TeamStorage` (round-trip, corrupt entries), `Messages.deserialize`, `PluginSettings` sanitizers and `UpdateChecker` edge cases.
+- The backpack name is now entered through a Paper dialog text input instead of resetting to the default; blank input is rejected with a dedicated message.
+- Message placeholders resolve through MiniMessage `TagResolver`, so player names containing `<...>` can no longer inject formatting; legacy `§` templates behave as before.
+- Code modernization: pattern-matching `instanceof`, arrow `switch`, `removeIf`, `String.join`, streams and `.formatted()` logging; `TeamRegistry.membersOf` returns an empty set instead of null.
 
 ### Verification
 - `./gradlew build --no-daemon` passes after every update: compilation, JUnit tests, Checkstyle and SpotBugs.
