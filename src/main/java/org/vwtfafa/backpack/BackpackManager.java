@@ -1,10 +1,18 @@
 package org.vwtfafa.backpack;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickCallback;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import io.papermc.paper.dialog.Dialog;
+import io.papermc.paper.dialog.DialogResponseView;
+import io.papermc.paper.registry.data.dialog.ActionButton;
+import io.papermc.paper.registry.data.dialog.DialogBase;
+import io.papermc.paper.registry.data.dialog.action.DialogAction;
+import io.papermc.paper.registry.data.dialog.input.DialogInput;
+import io.papermc.paper.registry.data.dialog.type.DialogType;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Sound;
@@ -45,6 +53,7 @@ import java.nio.file.StandardCopyOption;
 public class BackpackManager implements Listener {
     private static final int MIN_BACKPACK_SIZE = 9;
     private static final int MAX_BACKPACK_SIZE = 54;
+    private static final int MAX_NAME_LENGTH = 64;
     private static final long AUDIT_LOG_MAX_BYTES = 5L * 1024L * 1024L;
     private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
     private static final List<NamedTextColor> TITLE_COLOR_CYCLE =
@@ -752,12 +761,10 @@ public class BackpackManager implements Listener {
             }
             switch (event.getSlot()) {
                 case 0:
-                    // Name ändern (Dialog oder Standard)
-                    this.backpackName = MINI_MESSAGE.serialize(messages.component("gui-default-backpack-name"));
-                    saveConfigValue("backpack.name", this.backpackName);
-                    updateBackpackGUI(player);
-                    messages.send(player, "config-changed-name");
-                    break;
+                    // Rename via dialog text input; the dialog replaces the
+                    // inventory screen, so skip the trailing closeInventory
+                    openNameDialog(player);
+                    return;
                 case 1:
                     // Farbe ändern (cycle: Aqua -> Green -> Red -> Aqua ...)
                     this.backpackName = cycleColor(this.backpackName);
@@ -1005,6 +1012,52 @@ public class BackpackManager implements Listener {
                         "Failed to save backpack " + owner + " from " + source, e);
             }
         }
+    }
+
+    /**
+     * Opens a dialog with a text input for the backpack name, prefilled with
+     * the current plain-text title so MiniMessage tags are not exposed raw.
+     */
+    private void openNameDialog(Player player) {
+        String plainCurrent =
+                PlainTextComponentSerializer.plainText().serialize(Messages.deserialize(backpackName));
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(messages.component("gui-dialog-name-title"))
+                        .inputs(List.of(DialogInput.text("name", 200,
+                                messages.component("gui-dialog-name-label"), false,
+                                plainCurrent, MAX_NAME_LENGTH, null)))
+                        .build())
+                .type(DialogType.confirmation(
+                        ActionButton.create(messages.component("gui-dialog-confirm"), null, 100,
+                                DialogAction.customClick(
+                                        (response, audience) -> applyDialogName(player, response),
+                                        ClickCallback.Options.builder().uses(1).build())),
+                        ActionButton.create(messages.component("gui-dialog-cancel"), null, 100, null))));
+        player.closeInventory();
+        player.showDialog(dialog);
+    }
+
+    /**
+     * Applies a confirmed dialog name: blank input is rejected, anything else
+     * is stored raw (MiniMessage and legacy colors keep working in titles).
+     */
+    private void applyDialogName(Player player, DialogResponseView response) {
+        if (!player.isOnline()) {
+            return;
+        }
+        String input = response == null ? null : response.getText("name");
+        if (input == null || input.isBlank()) {
+            messages.send(player, "config-invalid-name");
+            return;
+        }
+        String name = input.strip();
+        if (name.length() > MAX_NAME_LENGTH) {
+            name = name.substring(0, MAX_NAME_LENGTH);
+        }
+        this.backpackName = name;
+        saveConfigValue("backpack.name", this.backpackName);
+        updateBackpackGUI(player);
+        messages.send(player, "config-changed-name");
     }
 
     /**
