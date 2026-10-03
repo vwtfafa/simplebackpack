@@ -61,7 +61,7 @@ class TeamRegistryTest {
         assertTrue(registry.removeMember(owner));
 
         assertNull(registry.findOwner(owner));
-        assertNull(registry.membersOf(owner));
+        assertEquals(Set.of(), registry.membersOf(owner));
     }
 
     @Test

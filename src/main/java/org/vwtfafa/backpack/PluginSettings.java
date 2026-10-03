@@ -70,8 +70,8 @@ final class PluginSettings {
         if (name != null && !name.isBlank()) {
             return name;
         }
-        logger.warning("Invalid backpack.name in config.yml; falling back to '"
-                + DEFAULT_BACKPACK_NAME + "'.");
+        logger.warning("Invalid backpack.name in config.yml; falling back to '%s'."
+                .formatted(DEFAULT_BACKPACK_NAME));
         return DEFAULT_BACKPACK_NAME;
     }
 
@@ -83,9 +83,8 @@ final class PluginSettings {
         if (size >= 9 && size <= 54 && size % 9 == 0) {
             return size;
         }
-        logger.warning("Invalid backpack.size '" + size
-                + "' in config.yml; expected one of 9, 18, 27, 36, 45, 54. Falling back to "
-                + DEFAULT_BACKPACK_SIZE + ".");
+        logger.warning("Invalid backpack.size '%s' in config.yml; expected one of 9, 18, 27, 36, 45, 54. Falling back to %s."
+                .formatted(size, DEFAULT_BACKPACK_SIZE));
         return DEFAULT_BACKPACK_SIZE;
     }
 

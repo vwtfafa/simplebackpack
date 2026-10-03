@@ -86,8 +86,9 @@ public class Messages {
             message = fallbackConfig.getString(key);
         }
         if (message == null) {
-            plugin.getLogger().warning("Missing message key '" + key
-                    + "' in lang/messages_" + configuredLanguage() + ".yml and fallback; check your lang files.");
+            plugin.getLogger().warning(
+                    "Missing message key '%s' in lang/messages_%s.yml and fallback; check your lang files."
+                            .formatted(key, configuredLanguage()));
             return "";
         }
         return message;
@@ -191,8 +192,8 @@ public class Messages {
             if (target.exists()) {
                 // Keep the legacy section so customized entries are not lost;
                 // they can be merged into the lang file manually.
-                plugin.getLogger().warning("Legacy messages." + code
-                        + " kept in config.yml because " + target.getPath() + " already exists.");
+                plugin.getLogger().warning("Legacy messages.%s kept in config.yml because %s already exists."
+                        .formatted(code, target.getPath()));
                 continue;
             }
             YamlConfiguration out = new YamlConfiguration();
@@ -201,10 +202,10 @@ public class Messages {
             }
             try {
                 out.save(target);
-                plugin.getLogger().info("Migrated legacy messages." + code + " to " + target.getPath());
+                plugin.getLogger().info("Migrated legacy messages.%s to %s".formatted(code, target.getPath()));
                 legacy.set(code, null);
             } catch (IOException e) {
-                plugin.getLogger().warning("Failed to migrate legacy messages." + code + ": " + e.getMessage());
+                plugin.getLogger().warning("Failed to migrate legacy messages.%s: %s".formatted(code, e.getMessage()));
             }
         }
         if (legacy.getKeys(false).isEmpty()) {

@@ -122,11 +122,11 @@ public class TeamRegistry {
 
     /**
      * Returns an immutable snapshot of the member set of the team owned by
-     * the given player, or null when there is no such team.
+     * the given player, or an empty set when there is no such team.
      */
     public Set<UUID> membersOf(UUID owner) {
         Set<UUID> members = teamsByOwner.get(owner);
-        return members == null ? null : Set.copyOf(members);
+        return members == null ? Set.of() : Set.copyOf(members);
     }
 
     /**

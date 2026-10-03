@@ -70,9 +70,10 @@ public class UpdateChecker {
                 if (e instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                 }
-                plugin.getLogger().warning("Update-Check fehlgeschlagen: " + e.getMessage());
+                plugin.getLogger().warning("Update-Check fehlgeschlagen: %s".formatted(e.getMessage()));
             } catch (RuntimeException e) {
-                plugin.getLogger().warning("Update-Check fehlgeschlagen (unerwartete Antwort): " + e.getMessage());
+                plugin.getLogger().warning("Update-Check fehlgeschlagen (unerwartete Antwort): %s"
+                        .formatted(e.getMessage()));
             }
         });
     }
@@ -86,7 +87,8 @@ public class UpdateChecker {
         try {
             json = JsonParser.parseString(body).getAsJsonObject();
         } catch (RuntimeException e) {
-            plugin.getLogger().warning("Update-Check fehlgeschlagen: Antwort ist kein JSON (" + e.getMessage() + ").");
+            plugin.getLogger().warning("Update-Check fehlgeschlagen: Antwort ist kein JSON (%s)."
+                    .formatted(e.getMessage()));
             return;
         }
         if (!json.has("tag_name") || json.get("tag_name").isJsonNull()) {

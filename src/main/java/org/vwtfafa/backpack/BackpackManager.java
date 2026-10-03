@@ -42,7 +42,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -162,13 +161,7 @@ public class BackpackManager implements Listener {
      * Removes expired shared sessions from the map.
      */
     void cleanupExpiredSessions() {
-        Iterator<Map.Entry<UUID, SharedSession>> it = sharedSessions.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<UUID, SharedSession> entry = it.next();
-            if (entry.getValue().isExpired()) {
-                it.remove();
-            }
-        }
+        sharedSessions.entrySet().removeIf(entry -> entry.getValue().isExpired());
     }
 
     public void updateBackpackGUI(Player player) {
@@ -416,8 +409,8 @@ public class BackpackManager implements Listener {
         Map<Integer, ItemStack> rest = inv.addItem(stored.toArray(new ItemStack[0]));
         if (rest.isEmpty()) {
             if (sidecar.delete()) {
-                plugin.getLogger().info("Restored " + stored.size()
-                        + " overflow item(s) into backpack " + uuid + ".");
+                plugin.getLogger().info("Restored %s overflow item(s) into backpack %s."
+                        .formatted(stored.size(), uuid));
                 logAudit("OVERFLOW_RESTORED " + uuid + " (" + stored.size() + " items)");
             }
             return;
@@ -433,12 +426,11 @@ public class BackpackManager implements Listener {
         }
         try {
             rewritten.save(sidecar);
-            plugin.getLogger().warning("Restored " + (stored.size() - rest.size())
-                    + " overflow item(s) into backpack " + uuid + "; " + rest.size()
-                    + " item(s) remain in " + sidecar.getName() + ".");
+            plugin.getLogger().warning("Restored %s overflow item(s) into backpack %s; %s item(s) remain in %s."
+                    .formatted(stored.size() - rest.size(), uuid, rest.size(), sidecar.getName()));
         } catch (IOException e) {
-            plugin.getLogger().severe("Failed to rewrite overflow file for backpack "
-                    + uuid + ": " + e.getMessage());
+            plugin.getLogger().severe("Failed to rewrite overflow file for backpack %s: %s"
+                    .formatted(uuid, e.getMessage()));
         }
     }
 
@@ -476,13 +468,13 @@ public class BackpackManager implements Listener {
         }
         try {
             overflowConfig.save(overflowFile);
-            plugin.getLogger().warning("Backpack " + owner + " shrank below its stored contents; "
-                    + items.size() + " item(s) saved to " + overflowFile.getName());
+            plugin.getLogger().warning("Backpack %s shrank below its stored contents; %s item(s) saved to %s."
+                    .formatted(owner, items.size(), overflowFile.getName()));
             logAudit("OVERFLOW " + owner.toString() + " -> " + overflowFile.getName()
                     + " (" + items.size() + " items)");
         } catch (IOException e) {
-            plugin.getLogger().severe("Failed to store overflowing backpack contents of "
-                    + owner + ": " + e.getMessage());
+            plugin.getLogger().severe("Failed to store overflowing backpack contents of %s: %s"
+                    .formatted(owner, e.getMessage()));
         }
     }
 
@@ -760,32 +752,34 @@ public class BackpackManager implements Listener {
                 return;
             }
             switch (event.getSlot()) {
-                case 0:
+                case 0 -> {
                     // Rename via dialog text input; the dialog replaces the
                     // inventory screen, so skip the trailing closeInventory
                     openNameDialog(player);
                     return;
-                case 1:
+                }
+                case 1 -> {
                     // Farbe ändern (cycle: Aqua -> Green -> Red -> Aqua ...)
                     this.backpackName = cycleColor(this.backpackName);
                     saveConfigValue("backpack.name", this.backpackName);
                     updateBackpackGUI(player);
                     messages.send(player, "config-changed-color");
-                    break;
-                case 2:
+                }
+                case 2 -> {
                     // Größe ändern (cycle)
                     int newSize = (this.backpackSize == MAX_BACKPACK_SIZE)
                         ? MIN_BACKPACK_SIZE
                         : this.backpackSize + MIN_BACKPACK_SIZE;
-                    if (!canShrinkSafely(player, validateBackpackSize(newSize))) {
+                    if (canShrinkSafely(player, validateBackpackSize(newSize))) {
+                        this.backpackSize = validateBackpackSize(newSize);
+                        saveConfigValue("backpack.size", this.backpackSize);
+                        updateBackpackGUI(player);
+                        messages.send(player, "config-changed-size");
+                    } else {
                         messages.send(player, "resize-no-space");
-                        break;
                     }
-                    this.backpackSize = validateBackpackSize(newSize);
-                    saveConfigValue("backpack.size", this.backpackSize);
-                    updateBackpackGUI(player);
-                    messages.send(player, "config-changed-size");
-                    break;
+                }
+                default -> { }
             }
             player.closeInventory();
         }
@@ -845,7 +839,9 @@ public class BackpackManager implements Listener {
 
     @org.bukkit.event.EventHandler
     public void onInventoryCloseEvent(InventoryCloseEvent event) {
-        Player viewer = (Player) event.getPlayer();
+        if (!(event.getPlayer() instanceof Player viewer)) {
+            return;
+        }
         if (!(event.getView().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)) return;
         if (holder.getType() == BackpackInventoryHolder.Type.CONFIG || holder.isPreview()) return;
         // If admin was editing a "Backpack: <uuid>" view, persist changes

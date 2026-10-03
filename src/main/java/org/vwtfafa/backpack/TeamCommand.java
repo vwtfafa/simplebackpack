@@ -8,6 +8,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -89,8 +90,9 @@ final class TeamCommand extends SubCommand {
     private void showTeamInfo(Player player) {
         UUID uuid = player.getUniqueId();
         UUID teamOwner = plugin.teamRegistry().findOwner(uuid);
-        Set<UUID> teamMembers = teamOwner == null ? null : plugin.teamRegistry().membersOf(teamOwner);
-        if (teamMembers == null || teamMembers.isEmpty()) {
+        Set<UUID> teamMembers =
+                teamOwner == null ? Set.of() : plugin.teamRegistry().membersOf(teamOwner);
+        if (teamMembers.isEmpty()) {
             TeamInvite invite = plugin.pendingInvites().get(uuid);
             if (invite != null && !invite.isExpired()) {
                 plugin.messages().send(player, "team-pending", "{player}",
@@ -100,19 +102,14 @@ final class TeamCommand extends SubCommand {
             }
             return;
         }
-        StringBuilder names = new StringBuilder();
-        for (UUID member : teamMembers) {
-            // Resolve offline members by name as well; fall back to the UUID
-            String name = plugin.manager().playerName(member);
-            if (member.equals(teamOwner)) {
-                name += " (L)";
-            }
-            names.append(name).append(", ");
-        }
-        if (!names.isEmpty()) {
-            names.setLength(names.length() - 2); // remove trailing separator
-        }
-        plugin.messages().send(player, "team-members", "{members}", names.toString());
+        // Resolve offline members by name as well; fall back to the UUID
+        List<String> names = teamMembers.stream()
+                .map(member -> {
+                    String name = plugin.manager().playerName(member);
+                    return member.equals(teamOwner) ? name + " (L)" : name;
+                })
+                .toList();
+        plugin.messages().send(player, "team-members", "{members}", String.join(", ", names));
     }
 
     @Override

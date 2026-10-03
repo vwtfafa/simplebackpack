@@ -33,11 +33,8 @@ final class TeamStorage {
         List<String> owners = new ArrayList<>();
         for (Map.Entry<UUID, Set<UUID>> entry : registry.entries()) {
             owners.add(entry.getKey().toString());
-            List<String> members = new ArrayList<>();
-            for (UUID member : entry.getValue()) {
-                members.add(member.toString());
-            }
-            config.set("teams." + entry.getKey(), members);
+            config.set("teams." + entry.getKey(),
+                    entry.getValue().stream().map(UUID::toString).toList());
         }
         config.set("teams.owners", owners);
         // Write through a temp file with an atomic move so a crash mid-save
@@ -80,8 +77,7 @@ final class TeamStorage {
                 try {
                     members.add(UUID.fromString(memberKey));
                 } catch (IllegalArgumentException ignored) {
-                    logger.warning("Ignoring invalid member '" + memberKey
-                            + "' of team " + ownerKey);
+                    logger.warning("Ignoring invalid member '%s' of team %s".formatted(memberKey, ownerKey));
                 }
             }
             registry.createTeam(owner, members);
