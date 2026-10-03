@@ -31,4 +31,27 @@ class MessagesTest {
         assertEquals(Component.text("<red"), Messages.deserialize("<red"));
         assertEquals(Component.text("<#notacolor>"), Messages.deserialize("<#notacolor>"));
     }
+
+    @Test
+    void placeholdersSubstituteNormalValues() {
+        assertEquals(Component.text("Hi Notch!"),
+                Messages.renderTemplate("Hi {player}!", "{player}", "Notch"));
+    }
+
+    @Test
+    void placeholderValuesCannotInjectFormatting() {
+        assertEquals(Component.text("Hi <red>Notch!"),
+                Messages.renderTemplate("Hi {player}!", "{player}", "<red>Notch"));
+    }
+
+    @Test
+    void templateFormattingStillApplies() {
+        Component rendered = Messages.renderTemplate("<green>Hi {player}!", "{player}", "Notch");
+        assertEquals(NamedTextColor.GREEN, rendered.color());
+    }
+
+    @Test
+    void legacyTemplatesKeepStringSubstitution() {
+        assertDoesNotThrow(() -> Messages.renderTemplate("§aHi {player}!", "{player}", "<red>Notch"));
+    }
 }
