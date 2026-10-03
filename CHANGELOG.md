@@ -10,6 +10,18 @@
 - Bumped Gradle wrapper from `9.7.1` to `9.8.0` (`gradle-wrapper.jar`, `gradle-wrapper.properties`, `gradlew.bat`).
 - Bumped plugin version to 7.2.
 
+### Fixed
+- Hardened message handling: `deserialize` no longer throws on null or malformed MiniMessage (falls back to empty/plain text), unknown lang keys are logged instead of failing silently, and legacy `messages` migration no longer deletes unmigrated sections.
+- Invalid `backpack.size` values are rejected at load/reload with a warning and fall back to 27 instead of crashing inventory creation; blank `backpack.name` falls back to the default.
+- Update checker no longer dies silently on non-JSON GitHub responses and compares pre-release versions (`-beta`, `-SNAPSHOT`, `-pre-2`) correctly.
+- Overflow sidecars merge instead of overwriting and are restored on load; resize hands items to the backpack owner (or the sidecar when offline) and closes stale admin views; admin saves with a changed size are discarded instead of partially written.
+- Death-clears can no longer be undone by an in-flight close-save and shutdown saves win over pending async writes (per-owner write sequences); leftover `.yml.tmp` files are cleaned up on start.
+- `teams.yml` is written atomically with a `.bak` backup; a single bad UUID no longer discards a whole team.
+- Usage policy (`backpacks-enabled`, `disabled-worlds`, `allow-in-creative`) is enforced on open and re-checked on world/game-mode change; `/team accept` no longer pulls members out of other teams; `/backpackshare` rejects self-shares and clamps durations.
+- Team state is thread-safe (concurrent maps, snapshot reads, atomic capped joins); `pendingInvites` no longer risks `ConcurrentModificationException`.
+- Classic mode now also hides `/backpackconfig` and `/backpackshare` as documented; disabled reload/config/sharing report a dedicated message; `/backpackadmin clear` works from console; implemented the documented `backpack-full` message (sent when overflow remains); `plugin.yml` lists all commands; player names are cached with join-time refresh.
+- New tests: `TeamRegistry` (moves, succession, caps, snapshot isolation), `TeamStorage` (round-trip, corrupt entries), `Messages.deserialize`, `PluginSettings` sanitizers and `UpdateChecker` edge cases.
+
 ### Verification
 - `./gradlew build --no-daemon` passes after every update: compilation, JUnit tests, Checkstyle and SpotBugs.
 - Paper API usage verified against the `26.3.build.143-beta` Javadocs; `run-paper` plugin stays at `3.1.0` (latest).
