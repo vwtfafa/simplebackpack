@@ -45,15 +45,24 @@ final class TeamCommand extends SubCommand {
 
     private void acceptInvite(Player player) {
         UUID targetId = player.getUniqueId();
-        TeamInvite invite = plugin.pendingInvites().remove(targetId);
+        TeamInvite invite = plugin.pendingInvites().get(targetId);
         if (invite == null) {
             showTeamInfo(player);
             return;
         }
         if (invite.isExpired()) {
+            plugin.pendingInvites().remove(targetId);
             plugin.messages().send(player, "team-invite-expired");
             return;
         }
+        // Never pull members out of another team silently; they must leave
+        // their current team first.
+        if (plugin.teamRegistry().findOwner(targetId) != null) {
+            plugin.pendingInvites().remove(targetId);
+            plugin.messages().send(player, "already-in-team");
+            return;
+        }
+        plugin.pendingInvites().remove(targetId);
         UUID inviterId = invite.inviter();
         UUID owner = plugin.teamRegistry().findOwner(inviterId);
         if (owner == null) {

@@ -6,8 +6,11 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -55,6 +58,12 @@ public class BackpackManager implements Listener {
     private final File dataFolder;
     private volatile String backpackName;
     private volatile int backpackSize;
+    // Usage policy snapshot (worlds, creative, global toggle): enforced on
+    // open and re-checked when players change world or game mode, so an open
+    // backpack cannot be carried into a restricted context.
+    private volatile boolean usageEnabled = true;
+    private volatile boolean usageAllowCreative;
+    private volatile List<String> usageDisabledWorlds = List.of();
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
     // Owners whose backpack an inventory-close event just persisted; lets the
     // quit-time autosave skip the redundant second write on disconnects
@@ -99,6 +108,11 @@ public class BackpackManager implements Listener {
     }
 
     public void openBackpack(Player player) {
+        String blocked = usageBlockReason(player);
+        if (blocked != null) {
+            messages.send(player, blocked);
+            return;
+        }
         Inventory inv = getBackpack(player);
         player.openInventory(inv);
         if (plugin.getConfig().getBoolean("backpack.open-sound", true)) {
@@ -559,11 +573,19 @@ public class BackpackManager implements Listener {
         logAudit("ADMIN_OPEN " + admin.getName() + " -> " + owner.toString() + " preview=" + preview);
     }
 
-    // Share a backpack temporarily: target can view owner's backpack until expiryMillis since now
-    public void shareBackpack(UUID owner, UUID target, long durationMillis) {
-        long expiry = System.currentTimeMillis() + durationMillis;
+    // Share a backpack temporarily: target can view owner's backpack until expiryMillis since now.
+    // Returns false when the share was rejected (self-share or non-positive
+    // duration); the duration is clamped to one minute .. seven days so direct
+    // callers cannot create permanent or overflowing sessions.
+    public boolean shareBackpack(UUID owner, UUID target, long durationMillis) {
+        if (owner.equals(target)) {
+            return false;
+        }
+        long clamped = Math.min(Math.max(durationMillis, 60_000L), 7L * 24L * 60L * 60_000L);
+        long expiry = System.currentTimeMillis() + clamped;
         sharedSessions.put(target, new SharedSession(owner, expiry));
         logAudit("SHARE " + owner.toString() + " -> " + target.toString() + " until=" + expiry);
+        return true;
     }
 
 
@@ -604,7 +626,71 @@ public class BackpackManager implements Listener {
         this.teamEnabled = teamEnabled;
     }
 
+    /**
+     * Refreshes the usage policy snapshot (global toggle, creative mode,
+     * disabled worlds) after (re)loads; callers pass the already validated
+     * {@link PluginSettings} values.
+     */
+    public void setUsagePolicy(boolean enabled, boolean allowInCreative, List<String> disabledWorlds) {
+        this.usageEnabled = enabled;
+        this.usageAllowCreative = allowInCreative;
+        this.usageDisabledWorlds = disabledWorlds != null ? List.copyOf(disabledWorlds) : List.of();
+    }
+
+    /**
+     * Returns the message key explaining why the player may not use their
+     * backpack right now, or null when usage is allowed.
+     */
+    private String usageBlockReason(Player player) {
+        return usageBlockReason(player, player.getGameMode());
+    }
+
+    private String usageBlockReason(Player player, GameMode gameMode) {
+        if (!usageEnabled) {
+            return "backpacks-disabled";
+        }
+        if (usageDisabledWorlds.contains(player.getWorld().getName())) {
+            return "not-allowed-world";
+        }
+        if (!usageAllowCreative && gameMode == GameMode.CREATIVE) {
+            return "creative-not-allowed";
+        }
+        return null;
+    }
+
+    /**
+     * Closes an open backpack view that just became illegal (world change or
+     * game mode change) and tells the player why.
+     */
+    private void enforceUsagePolicy(Player player, GameMode gameMode) {
+        if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof BackpackInventoryHolder holder)
+                || holder.getType() != BackpackInventoryHolder.Type.BACKPACK) {
+            return;
+        }
+        String blocked = usageBlockReason(player, gameMode);
+        if (blocked != null) {
+            player.closeInventory();
+            messages.send(player, blocked);
+        }
+    }
+
+    @org.bukkit.event.EventHandler
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        enforceUsagePolicy(event.getPlayer(), event.getPlayer().getGameMode());
+    }
+
+    @org.bukkit.event.EventHandler
+    public void onPlayerGameModeChange(PlayerGameModeChangeEvent event) {
+        // The event fires before the change applies, so check the new mode.
+        enforceUsagePolicy(event.getPlayer(), event.getNewGameMode());
+    }
+
     public void openConfigGUI(Player player) {
+        String blocked = usageBlockReason(player);
+        if (blocked != null) {
+            messages.send(player, blocked);
+            return;
+        }
         BackpackInventoryHolder holder = BackpackInventoryHolder.config();
         Inventory gui = Bukkit.createInventory(holder, 9, messages.component("gui-config-title"));
         holder.setInventory(gui);

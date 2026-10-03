@@ -51,6 +51,8 @@ public class Backpack extends JavaPlugin implements Listener {
         getLogger().info("bStats metrics enabled (ID: " + BSTATS_PLUGIN_ID + ")");
         manager = new BackpackManager(this, messages, settings.backpackName(), settings.backpackSize(),
                 teamRegistry, settings.teamEnabled());
+        manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
+                settings.disabledWorlds());
         getServer().getPluginManager().registerEvents(this, this);
         registerCommands();
         if (settings.adminEnabled() && settings.adminGuiEnabled()) {
@@ -98,6 +100,8 @@ public class Backpack extends JavaPlugin implements Listener {
         loadConfigOptions();
         manager.setConfig(settings.backpackName(), settings.backpackSize(),
                 settings.teamEnabled());
+        manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
+                settings.disabledWorlds());
     }
 
     @EventHandler
@@ -181,6 +185,10 @@ public class Backpack extends JavaPlugin implements Listener {
         settings.setBackpacksEnabled(enabled);
         getConfig().set("backpacks-enabled", enabled);
         saveConfig();
+        if (manager != null) {
+            manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
+                    settings.disabledWorlds());
+        }
     }
 
     boolean allowInCreative() {
