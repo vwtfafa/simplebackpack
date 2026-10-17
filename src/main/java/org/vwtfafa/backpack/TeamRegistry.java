@@ -68,22 +68,30 @@ public class TeamRegistry {
     }
 
     /**
+     * Outcome of removing a member: whether the member was part of a team
+     * and, when the former owner left a non-empty team, which member took
+     * over ownership.
+     */
+    public record RemovalResult(boolean leftTeam, UUID newOwner) {
+    }
+
+    /**
      * Removes a member from their team. When the owner leaves, ownership
      * passes deterministically to the member with the lowest UUID. An empty
-     * team is removed entirely.
-     *
-     * @return true if the member was part of a team
+     * team is removed entirely. The successor is reported so callers can
+     * hand over resources bound to the owner (e.g. the team backpack).
      */
-    public synchronized boolean removeMember(UUID member) {
+    public synchronized RemovalResult removeMember(UUID member) {
         UUID owner = ownerByMember.get(member);
         if (owner == null) {
-            return false;
+            return new RemovalResult(false, null);
         }
         Set<UUID> members = teamsByOwner.get(owner);
         if (members != null) {
             members.remove(member);
         }
         ownerByMember.remove(member);
+        UUID newOwner = null;
         if (members == null || members.isEmpty()) {
             teamsByOwner.remove(owner);
         } else if (member.equals(owner)) {
@@ -91,9 +99,10 @@ public class TeamRegistry {
             UUID successor = members.stream().min(UUID::compareTo).orElse(null);
             if (successor != null) {
                 transferOwnership(owner, successor);
+                newOwner = successor;
             }
         }
-        return true;
+        return new RemovalResult(true, newOwner);
     }
 
     /**

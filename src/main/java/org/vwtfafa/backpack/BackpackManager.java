@@ -687,6 +687,74 @@ public class BackpackManager implements Listener {
         return ownerId;
     }
 
+    /**
+     * Moves the team backpack from the leaving owner to their successor:
+     * open views of both involved backpacks are closed, the newest cached
+     * state is persisted, and the storage files are rekeyed so the team
+     * keeps its contents. A pre-existing file of the successor is preserved
+     * as a {@code .bak} backup before it is replaced.
+     */
+    public void transferBackpackOwnership(UUID oldOwner, UUID newOwner) {
+        if (oldOwner == null || newOwner == null || oldOwner.equals(newOwner)) {
+            return;
+        }
+        // Views hold detached copies; close them so no later save can
+        // resurrect a backpack under its previous owner (the successor's
+        // stale personal backpack included).
+        Inventory cached = backpacks.get(oldOwner);
+        Inventory successorStale = backpacks.get(newOwner);
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            Inventory top = online.getOpenInventory().getTopInventory();
+            if ((cached != null && cached.equals(top))
+                    || (successorStale != null && successorStale.equals(top))) {
+                online.closeInventory();
+            }
+        }
+        synchronized (saveIoLock) {
+            // Persist the newest cached state under the old owner first, then
+            // invalidate queued writes for both owners so they cannot
+            // recreate the old files or overwrite the moved one.
+            long sequence = nextSaveSequence(oldOwner);
+            nextSaveSequence(newOwner);
+            Inventory stored = backpacks.remove(oldOwner);
+            backpacks.remove(newOwner);
+            if (stored != null) {
+                writeInventory(oldOwner, snapshot(stored), "transfer", sequence);
+            }
+            moveStorageFile(new File(dataFolder, oldOwner + ".yml"),
+                    new File(dataFolder, newOwner + ".yml"));
+            moveStorageFile(new File(dataFolder, oldOwner + ".overflow.yml"),
+                    new File(dataFolder, newOwner + ".overflow.yml"));
+        }
+        logAudit("TRANSFER " + oldOwner + " -> " + newOwner);
+    }
+
+    /**
+     * Moves a backpack storage file (main or overflow) to the new owner,
+     * keeping an existing target file as a {@code .bak} first. Missing
+     * sources are ignored.
+     */
+    private void moveStorageFile(File source, File target) {
+        if (!source.exists()) {
+            return;
+        }
+        try {
+            if (target.exists()) {
+                Files.move(target.toPath(),
+                        new File(target.getParentFile(), target.getName() + ".bak").toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+            try {
+                Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(source.toPath(), target.toPath());
+            }
+        } catch (IOException e) {
+            plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                    "Failed to move backpack file " + source.getName() + " to " + target.getName(), e);
+        }
+    }
+
     public void setConfig(String backpackName, int backpackSize, boolean teamEnabled) {
         if (backpackName != null && !backpackName.isBlank()) {
             this.backpackName = backpackName;
