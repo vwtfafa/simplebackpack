@@ -168,7 +168,7 @@ public class BackpackManager implements Listener {
         // Recreate inventory with new size or name
         // Resolve the effective owner to maintain team/share integrity
         UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
-        Inventory oldInv = backpacks.get(effectiveOwner);
+        Inventory oldInv = loadBackpackSafely(effectiveOwner);
         // Close every open view of the old inventory before swapping so no
         // viewer keeps editing a detached inventory that would later be saved
         // over the resized one (split-brain data loss)
@@ -242,7 +242,7 @@ public class BackpackManager implements Listener {
      */
     private boolean canShrinkSafely(Player player, int newSize) {
         UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
-        Inventory oldInv = backpacks.get(effectiveOwner);
+        Inventory oldInv = loadBackpackSafely(effectiveOwner);
         if (oldInv == null || oldInv.getSize() <= newSize) {
             return true;
         }
@@ -342,6 +342,22 @@ public class BackpackManager implements Listener {
             inv.setItem(i, contents[i]);
         }
         backpacks.put(ownerId, inv);
+    }
+
+    /**
+     * Returns the owner's backpack, loading it from disk when it is not
+     * cached yet. GUI updates and shrink checks must never treat a
+     * not-yet-loaded backpack as empty, otherwise a fresh empty inventory
+     * would be stored over the player's items.
+     */
+    private Inventory loadBackpackSafely(UUID owner) {
+        Inventory cached = backpacks.get(owner);
+        if (cached != null) {
+            return cached;
+        }
+        Inventory loaded = loadBackpack(owner);
+        Inventory winner = backpacks.putIfAbsent(owner, loaded);
+        return winner != null ? winner : loaded;
     }
 
     private Inventory loadBackpack(UUID uuid) {
