@@ -298,8 +298,7 @@ public class BackpackManager implements Listener {
     /**
      * Reads the owner's backpack file off the main thread and installs it
      * later, so the first open never blocks on disk I/O. Silently skipped
-     * when the backpack got loaded meanwhile or when the file contains items
-     * in slots beyond the configured size (needs the full recovery path).
+     * when the backpack got loaded meanwhile.
      */
     void preloadBackpack(UUID ownerId) {
         if (backpacks.containsKey(ownerId)) {
@@ -314,8 +313,9 @@ public class BackpackManager implements Listener {
     }
 
     /**
-     * Reads stored slots without touching inventories; returns null when the
-     * stored size exceeds the configured one and recovery would be needed.
+     * Reads all stored slots off the main thread without touching
+     * inventories; returns null only when the file cannot be read at all
+     * (the caller then falls back to the blocking load path).
      */
     private ItemStack[] readInventoryFile(File file) {
         ItemStack[] contents = new ItemStack[MAX_BACKPACK_SIZE];
@@ -326,9 +326,6 @@ public class BackpackManager implements Listener {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
             for (int i = 0; i < MAX_BACKPACK_SIZE; i++) {
                 contents[i] = config.getItemStack("slot" + i);
-                if (i >= backpackSize && contents[i] != null && !contents[i].getType().isAir()) {
-                    return null;
-                }
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to preload backpack " + file.getName()
@@ -342,13 +339,47 @@ public class BackpackManager implements Listener {
         if (contents == null || backpacks.containsKey(ownerId)) {
             return;
         }
+        backpacks.put(ownerId, installContents(ownerId, contents));
+    }
+
+    /**
+     * Builds the runtime inventory of a backpack from stored contents:
+     * items up to the configured size are placed directly, items from
+     * removed slots are re-added to free slots or the overflow sidecar.
+     * The join preload and the on-demand load share this path so recovery
+     * never depends on which one ran first.
+     */
+    private Inventory installContents(UUID ownerId, ItemStack[] contents) {
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(ownerId);
         Inventory inv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
         holder.setInventory(inv);
-        for (int i = 0; i < backpackSize; i++) {
-            inv.setItem(i, contents[i]);
+        List<ItemStack> homeless = new ArrayList<>();
+        for (int i = 0; i < Math.min(contents.length, MAX_BACKPACK_SIZE); i++) {
+            ItemStack item = contents[i];
+            if (item == null || item.getType().isAir()) {
+                continue;
+            }
+            if (i < backpackSize) {
+                inv.setItem(i, item);
+            } else {
+                homeless.add(item);
+            }
         }
-        backpacks.put(ownerId, inv);
+        // Recover items stored in slots that no longer exist because the
+        // configured size was reduced; never silently drop them
+        Map<Integer, ItemStack> leftover = homeless.isEmpty()
+                ? Map.of()
+                : inv.addItem(homeless.toArray(new ItemStack[0]));
+        if (!leftover.isEmpty()) {
+            storeOverflow(ownerId, leftover.values());
+        } else {
+            // Nothing homeless from the main file: drain a previous sidecar
+            // now that space may have freed up (e.g. size was increased
+            // again).
+            restoreOverflow(ownerId, inv);
+        }
+        nextRevision(ownerId);
+        return inv;
     }
 
     /**
@@ -369,36 +400,11 @@ public class BackpackManager implements Listener {
 
     private Inventory loadBackpack(UUID uuid) {
         File file = new File(dataFolder, uuid + ".yml");
-        BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(uuid);
-        Inventory inv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
-        holder.setInventory(inv);
-        if (!file.exists()) {
-            return inv;
+        ItemStack[] contents = readInventoryFile(file);
+        if (contents == null) {
+            contents = new ItemStack[MAX_BACKPACK_SIZE];
         }
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-        for (int i = 0; i < backpackSize; i++) {
-            inv.setItem(i, config.getItemStack("slot" + i));
-        }
-        // Recover items stored in slots that no longer exist because the
-        // configured size was reduced; never silently drop them
-        List<ItemStack> overflow = new ArrayList<>();
-        for (int i = backpackSize; i < MAX_BACKPACK_SIZE; i++) {
-            ItemStack item = config.getItemStack("slot" + i);
-            if (item != null && !item.getType().isAir()) {
-                overflow.add(item);
-            }
-        }
-        Map<Integer, ItemStack> leftover = overflow.isEmpty()
-                ? Map.of()
-                : inv.addItem(overflow.toArray(new ItemStack[0]));
-        if (!leftover.isEmpty()) {
-            storeOverflow(uuid, leftover.values());
-            return inv;
-        }
-        // Nothing homeless from the main file: drain a previous sidecar now
-        // that space may have freed up (e.g. size was increased again).
-        restoreOverflow(uuid, inv);
-        return inv;
+        return installContents(uuid, contents);
     }
 
     /**
