@@ -55,6 +55,8 @@ public class BackpackManager implements Listener {
     private static final int MAX_NAME_LENGTH = 64;
     private static final int STORAGE_VERSION = 1;
     private static final long AUDIT_LOG_MAX_BYTES = 5L * 1024L * 1024L;
+    private static final DateTimeFormatter AUDIT_TIMESTAMP =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
     private static final List<NamedTextColor> TITLE_COLOR_CYCLE =
             List.of(NamedTextColor.AQUA, NamedTextColor.GREEN, NamedTextColor.RED);
@@ -573,8 +575,7 @@ public class BackpackManager implements Listener {
 
     // Audit logging
     private void logAudit(String line) {
-        String timestamped = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now())
-                + " - " + line;
+        String timestamped = AUDIT_TIMESTAMP.format(LocalDateTime.now()) + " - " + line;
         // File I/O must not block the main thread; while the plugin is
         // disabling, scheduled tasks are never run, so write directly
         if (plugin.isEnabled()) {

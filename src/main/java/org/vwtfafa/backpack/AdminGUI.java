@@ -26,6 +26,9 @@ public class AdminGUI implements Listener {
     private final BackpackManager manager;
     private final Messages messages;
     private final NamespacedKey ownerKey;
+    // Known backpacks of the open list; a fresh command invocation rescans,
+    // paging reuses the snapshot so browsing does not hit the disk per click
+    private List<UUID> knownBackpacks;
 
     public AdminGUI(BackpackManager manager, Messages messages) {
         this.manager = manager;
@@ -35,12 +38,18 @@ public class AdminGUI implements Listener {
     }
 
     public void openAdminGUI(Player admin) {
+        // Entry point (command): always show a fresh scan, then page through it
+        knownBackpacks = null;
         openAdminGUI(admin, 0);
     }
 
     public void openAdminGUI(Player admin, int page) {
-        List<UUID> known = new ArrayList<>(manager.listKnownBackpacks());
-        known.sort(UUID::compareTo);
+        if (knownBackpacks == null) {
+            List<UUID> known = new ArrayList<>(manager.listKnownBackpacks());
+            known.sort(UUID::compareTo);
+            knownBackpacks = known;
+        }
+        List<UUID> known = knownBackpacks;
         int maxPage = Math.max(0, (known.size() - 1) / PAGE_SIZE);
         int current = Math.min(Math.max(0, page), maxPage);
 

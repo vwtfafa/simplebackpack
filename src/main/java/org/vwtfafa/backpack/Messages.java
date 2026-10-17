@@ -14,6 +14,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -29,6 +31,7 @@ public class Messages {
     private static final Pattern BRACE_PLACEHOLDER = Pattern.compile("\\{([A-Za-z0-9_]+)\\}");
 
     private final JavaPlugin plugin;
+    private final Set<String> reportedMissingKeys = ConcurrentHashMap.newKeySet();
     private YamlConfiguration languageConfig;
     private YamlConfiguration fallbackConfig;
     private String language = DEFAULT_LANGUAGE;
@@ -51,6 +54,8 @@ public class Messages {
         ensureLanguageFile(language);
         languageConfig = load(language);
         fallbackConfig = load(DEFAULT_LANGUAGE);
+        // Re-evaluate warnings: the reload may have fixed or introduced gaps
+        reportedMissingKeys.clear();
     }
 
     /**
@@ -86,9 +91,11 @@ public class Messages {
             message = fallbackConfig.getString(key);
         }
         if (message == null) {
-            plugin.getLogger().warning(
-                    "Missing message key '%s' in lang/messages_%s.yml and fallback; check your lang files."
-                            .formatted(key, configuredLanguage()));
+            if (reportedMissingKeys.add(key)) {
+                plugin.getLogger().warning(
+                        "Missing message key '%s' in lang/messages_%s.yml and fallback; check your lang files."
+                                .formatted(key, configuredLanguage()));
+            }
             return "";
         }
         return message;
