@@ -53,6 +53,7 @@ public class BackpackManager implements Listener {
     private static final int MIN_BACKPACK_SIZE = 9;
     private static final int MAX_BACKPACK_SIZE = 54;
     private static final int MAX_NAME_LENGTH = 64;
+    private static final int STORAGE_VERSION = 1;
     private static final long AUDIT_LOG_MAX_BYTES = 5L * 1024L * 1024L;
     private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
     private static final List<NamedTextColor> TITLE_COLOR_CYCLE =
@@ -477,6 +478,7 @@ public class BackpackManager implements Listener {
             messages.send(ownerPlayer, "backpack-full", "{size}", String.valueOf(rest.size()));
         }
         YamlConfiguration rewritten = new YamlConfiguration();
+        rewritten.set("version", STORAGE_VERSION);
         int slot = 0;
         for (ItemStack item : rest.values()) {
             rewritten.set("slot" + slot++, item);
@@ -508,6 +510,7 @@ public class BackpackManager implements Listener {
         }
         File overflowFile = new File(dataFolder, owner + ".overflow.yml");
         YamlConfiguration overflowConfig = new YamlConfiguration();
+        overflowConfig.set("version", STORAGE_VERSION);
         int slot = 0;
         if (overflowFile.exists()) {
             YamlConfiguration existing = YamlConfiguration.loadConfiguration(overflowFile);
@@ -1163,6 +1166,7 @@ public class BackpackManager implements Listener {
                     createSnapshot(owner);
                 }
                 YamlConfiguration config = new YamlConfiguration();
+                config.set("version", STORAGE_VERSION);
                 for (int i = 0; i < contents.length; i++) config.set("slot" + i, contents[i]);
                 writeYamlFile(config, file);
                 saveSequences.put(owner, sequence);

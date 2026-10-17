@@ -21,6 +21,8 @@ import java.util.logging.Logger;
  * Persists the {@link TeamRegistry} to a YAML file.
  */
 final class TeamStorage {
+    private static final int STORAGE_VERSION = 1;
+
     private final File file;
     private final Logger logger;
 
@@ -31,6 +33,7 @@ final class TeamStorage {
 
     void save(TeamRegistry registry) {
         YamlConfiguration config = new YamlConfiguration();
+        config.set("version", STORAGE_VERSION);
         List<String> owners = new ArrayList<>();
         for (Map.Entry<UUID, Set<UUID>> entry : registry.entries()) {
             owners.add(entry.getKey().toString());
