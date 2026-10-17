@@ -158,7 +158,7 @@ public class Backpack extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         if (!settings.keepContentsOnDeath() && manager != null) {
-            manager.clearBackpack(event.getEntity());
+            manager.clearBackpack(event.getPlayer());
         }
     }
 
