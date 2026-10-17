@@ -77,6 +77,9 @@ public class BackpackManager implements Listener {
     // quit-time autosave skip the redundant second write on disconnects
     private final Map<UUID, Long> recentSaveOwners = new ConcurrentHashMap<>();
     private static final long RECENT_SAVE_WINDOW_MILLIS = 2000L;
+    // Highest write sequence that finished writing per owner; lets the
+    // quit-time deduplication verify that no write is still in flight
+    private final Map<UUID, Long> completedSaveSequences = new ConcurrentHashMap<>();
     private final File auditLogFile;
     // Guards all inventory file writes: prevents interleaved temp-file writes
     // without keeping an ever-growing per-owner lock map
@@ -128,6 +131,9 @@ public class BackpackManager implements Listener {
             return;
         }
         Inventory inv = getBackpack(player);
+        // Opening makes the inventory editable again; the dedup marker of a
+        // previous close save must not skip the save of later changes.
+        recentSaveOwners.remove(resolveEffectiveOwner(player.getUniqueId()));
         player.openInventory(inv);
         if (plugin.getConfig().getBoolean("backpack.open-sound", true)) {
             player.playSound(player.getLocation(), Sound.BLOCK_BARREL_OPEN, 1.0f, 1.0f);
@@ -538,8 +544,14 @@ public class BackpackManager implements Listener {
      */
     public void saveBackpackAsync(Player player, Runnable afterWrite) {
         UUID owner = resolveEffectiveOwner(player.getUniqueId());
-        Long lastSave = recentSaveOwners.remove(owner);
-        if (lastSave != null && System.currentTimeMillis() - lastSave <= RECENT_SAVE_WINDOW_MILLIS) {
+        Long lastSave = recentSaveOwners.get(owner);
+        Long completed = completedSaveSequences.get(owner);
+        Long latest = saveSequences.get(owner);
+        // Skip only when the previous close save is known to have finished
+        // and nothing was written since; otherwise newer changes would never
+        // reach disk when the server stops before the next save runs.
+        if (lastSave != null && completed != null && completed.equals(latest)
+                && System.currentTimeMillis() - lastSave <= RECENT_SAVE_WINDOW_MILLIS) {
             afterWrite.run();
             return;
         }
@@ -1057,6 +1069,9 @@ public class BackpackManager implements Listener {
             }
             if (!used) {
                 backpacks.remove(candidate);
+                completedSaveSequences.remove(candidate);
+                backpackRevisions.remove(candidate);
+                recentSaveOwners.remove(candidate);
             }
         }
     }
@@ -1137,6 +1152,7 @@ public class BackpackManager implements Listener {
                 for (int i = 0; i < contents.length; i++) config.set("slot" + i, contents[i]);
                 writeYamlFile(config, file);
                 saveSequences.put(owner, sequence);
+                completedSaveSequences.merge(owner, sequence, Math::max);
                 return true;
             } catch (IOException e) {
                 plugin.getLogger().log(java.util.logging.Level.SEVERE,
