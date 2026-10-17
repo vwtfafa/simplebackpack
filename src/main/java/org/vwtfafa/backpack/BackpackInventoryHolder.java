@@ -12,21 +12,27 @@ final class BackpackInventoryHolder implements InventoryHolder {
     private final UUID owner;
     private final boolean preview;
     private final int page;
+    private final long revision;
     private Inventory inventory;
 
     private BackpackInventoryHolder(Type type, UUID owner, boolean preview, int page) {
+        this(type, owner, preview, page, 0L);
+    }
+
+    private BackpackInventoryHolder(Type type, UUID owner, boolean preview, int page, long revision) {
         this.type = type;
         this.owner = owner;
         this.preview = preview;
         this.page = page;
+        this.revision = revision;
     }
 
     static BackpackInventoryHolder backpack(UUID owner) {
         return new BackpackInventoryHolder(Type.BACKPACK, owner, false, 0);
     }
 
-    static BackpackInventoryHolder admin(UUID owner, boolean preview) {
-        return new BackpackInventoryHolder(Type.ADMIN, owner, preview, 0);
+    static BackpackInventoryHolder admin(UUID owner, boolean preview, long revision) {
+        return new BackpackInventoryHolder(Type.ADMIN, owner, preview, 0, revision);
     }
 
     static BackpackInventoryHolder adminList(int page) {
@@ -51,6 +57,14 @@ final class BackpackInventoryHolder implements InventoryHolder {
 
     int getPage() {
         return page;
+    }
+
+    /**
+     * Backpack revision this admin edit view was opened with; a mismatch at
+     * close time means the stored backpack changed meanwhile.
+     */
+    long getRevision() {
+        return revision;
     }
 
     /**

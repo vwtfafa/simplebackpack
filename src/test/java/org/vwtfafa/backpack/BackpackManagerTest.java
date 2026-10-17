@@ -26,8 +26,8 @@ class BackpackManagerTest {
         assertEquals(BackpackInventoryHolder.Type.BACKPACK,
             BackpackInventoryHolder.backpack(owner).getType());
         assertEquals(BackpackInventoryHolder.Type.ADMIN,
-            BackpackInventoryHolder.admin(owner, true).getType());
-        assertTrue(BackpackInventoryHolder.admin(owner, true).isPreview());
+            BackpackInventoryHolder.admin(owner, true, 0L).getType());
+        assertTrue(BackpackInventoryHolder.admin(owner, true, 0L).isPreview());
         assertEquals(BackpackInventoryHolder.Type.CONFIG,
             BackpackInventoryHolder.config().getType());
     }

@@ -86,6 +86,11 @@ public class BackpackManager implements Listener {
     // a death-clear) is dropped instead of resurrecting deleted items, and the
     // synchronous shutdown save always wins over still-running async writes.
     private final Map<UUID, Long> saveSequences = new ConcurrentHashMap<>();
+    // Monotonic revision per owner, bumped whenever the stored backpack
+    // changes (saves, resizes, clears, transfers). Admin edit views remember
+    // the revision they opened with and discard their changes when it moved
+    // on, so a stale copy can never roll back newer contents.
+    private final Map<UUID, Long> backpackRevisions = new ConcurrentHashMap<>();
     private final Map<UUID, String> playerNameCache = new ConcurrentHashMap<>();
 
     public BackpackManager(JavaPlugin plugin, Messages messages, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled) {
@@ -169,35 +174,21 @@ public class BackpackManager implements Listener {
         // Resolve the effective owner to maintain team/share integrity
         UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
         Inventory oldInv = loadBackpackSafely(effectiveOwner);
+        // Rebuilding the backpack changes the stored state: admin edit
+        // copies opened earlier are invalidated and discard their changes
+        // when they are closed.
+        nextRevision(effectiveOwner);
         // Close every open view of the old inventory before swapping so no
         // viewer keeps editing a detached inventory that would later be saved
         // over the resized one (split-brain data loss)
-        if (oldInv != null) {
-            List<Player> viewers = new ArrayList<>();
-            List<Player> staleAdmins = new ArrayList<>();
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                if (!(online.getOpenInventory().getTopInventory().getHolder()
-                        instanceof BackpackInventoryHolder holder)) {
-                    continue;
-                }
-                if (oldInv.equals(online.getOpenInventory().getTopInventory())) {
-                    viewers.add(online);
-                } else if (holder.getType() == BackpackInventoryHolder.Type.ADMIN
-                        && effectiveOwner.equals(holder.getOwner())) {
-                    // Admin copies are separate inventories; without closing
-                    // them a later admin save would overwrite the resized one.
-                    staleAdmins.add(online);
-                }
+        List<Player> viewers = new ArrayList<>();
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (oldInv.equals(online.getOpenInventory().getTopInventory())) {
+                viewers.add(online);
             }
-            for (Player viewer : viewers) {
-                viewer.closeInventory();
-            }
-            for (Player admin : staleAdmins) {
-                admin.closeInventory();
-                messages.send(admin, "admin-edit-conflict");
-                logAudit("ADMIN_CONFLICT " + admin.getName() + " -> " + effectiveOwner
-                        + " (backpack resized, stale admin view closed)");
-            }
+        }
+        for (Player viewer : viewers) {
+            viewer.closeInventory();
         }
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(effectiveOwner);
         Inventory newInv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
@@ -626,9 +617,10 @@ public class BackpackManager implements Listener {
 
     // Admin opens a target backpack; preview=true -> read-only
     public void openForAdmin(UUID owner, Player admin, boolean preview) {
-        Inventory inv = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
-        // open a new inventory view for admin with same contents
-        BackpackInventoryHolder holder = BackpackInventoryHolder.admin(owner, preview);
+        Inventory inv = loadBackpackSafely(owner);
+        // open a new inventory view for admin with same contents; the
+        // revision ties the view to the state it was created from
+        BackpackInventoryHolder holder = BackpackInventoryHolder.admin(owner, preview, currentRevision(owner));
         String ownerName = playerName(owner);
         Component title = messages.component("gui-admin-view-title",
                 "{player}", ownerName);
@@ -716,6 +708,8 @@ public class BackpackManager implements Listener {
             // recreate the old files or overwrite the moved one.
             long sequence = nextSaveSequence(oldOwner);
             nextSaveSequence(newOwner);
+            nextRevision(oldOwner);
+            nextRevision(newOwner);
             Inventory stored = backpacks.remove(oldOwner);
             backpacks.remove(newOwner);
             if (stored != null) {
@@ -953,20 +947,22 @@ public class BackpackManager implements Listener {
         if (holder.getType() == BackpackInventoryHolder.Type.ADMIN) {
                 UUID owner = holder.getOwner();
                 // Never overwrite concurrent edits made by the owner or a team
-                // member viewing the live backpack right now; their version wins
-                if (isBackpackViewed(owner)) {
-                    messages.send(viewer, "admin-edit-conflict");
+                // member viewing the live backpack right now; their version wins.
+                // The revision check covers changes that were already stored
+                // while this edit view was open (close saves, resizes, clears).
+                if (isBackpackViewed(owner) || holder.getRevision() != currentRevision(owner)) {
+                    messages.send(viewer, "admin-edit-conflict", "{player}", playerName(owner));
                     logAudit("ADMIN_CONFLICT " + viewer.getName() + " -> " + owner.toString()
-                            + " (live view open, changes discarded)");
+                            + " (newer state exists, changes discarded)");
                     return;
                 }
                 Inventory top = event.getInventory();
                 // apply contents back to owner's stored backpack
-                Inventory stored = backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
+                Inventory stored = loadBackpackSafely(owner);
                 if (stored.getSize() != top.getSize()) {
                     // The backpack was resized while the admin view was open;
                     // a partial copy would silently drop or resurrect slots.
-                    messages.send(viewer, "admin-edit-conflict");
+                    messages.send(viewer, "admin-edit-conflict", "{player}", playerName(owner));
                     logAudit("ADMIN_CONFLICT " + viewer.getName() + " -> " + owner.toString()
                             + " (size changed from " + top.getSize() + " to "
                             + stored.getSize() + ", changes discarded)");
@@ -1059,6 +1055,8 @@ public class BackpackManager implements Listener {
         // The contents were snapshotted synchronously by the caller, so the
         // async write never races inventory mutations
         long sequence = nextSaveSequence(owner);
+        // The stored state changes as of now; invalidate admin edit views
+        nextRevision(owner);
         plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
             try {
                 writeInventory(owner, contents, source, sequence);
@@ -1073,6 +1071,14 @@ public class BackpackManager implements Listener {
 
     private long nextSaveSequence(UUID owner) {
         return saveSequences.merge(owner, 1L, Long::sum);
+    }
+
+    private long nextRevision(UUID owner) {
+        return backpackRevisions.merge(owner, 1L, Long::sum);
+    }
+
+    private long currentRevision(UUID owner) {
+        return backpackRevisions.getOrDefault(owner, 0L);
     }
 
     /**
