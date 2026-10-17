@@ -68,7 +68,6 @@ final class TeamCommand extends SubCommand {
             plugin.messages().send(player, "already-in-team");
             return;
         }
-        plugin.pendingInvites().remove(targetId);
         UUID inviterId = invite.inviter();
         UUID owner = plugin.teamRegistry().findOwner(inviterId);
         if (owner == null) {
@@ -79,17 +78,19 @@ final class TeamCommand extends SubCommand {
         } else {
             // The team may have filled up between invite and accept; the size
             // check and the join are atomic so parallel accepts stay capped.
+            // The invite is only consumed once the join actually succeeded.
             if (!plugin.teamRegistry().tryAddMember(owner, targetId, plugin.teamMaxSize())) {
                 plugin.messages().send(player, "team-full");
                 return;
             }
         }
+        plugin.pendingInvites().remove(targetId);
         plugin.saveTeams();
         String inviterName = plugin.manager().playerName(inviterId);
         plugin.messages().send(player, "team-joined", "{player}", inviterName);
         Player inviter = Bukkit.getPlayer(inviterId);
         if (inviter != null) {
-            plugin.messages().send(inviter, "team-joined", "{player}", player.getName());
+            plugin.messages().send(inviter, "team-member-joined", "{player}", player.getName());
         }
     }
 

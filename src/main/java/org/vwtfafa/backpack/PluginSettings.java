@@ -21,6 +21,7 @@ final class PluginSettings {
     private boolean teamEnabled = true;
     private boolean adminEnabled = true;
     private boolean adminGuiEnabled = true;
+    private boolean adminAutoSnapshot = true;
     private boolean showTeamCommands = true;
     private boolean showAdminCommands = true;
     private boolean liveConfigReload = true;
@@ -44,6 +45,7 @@ final class PluginSettings {
         settings.teamEnabled = config.getBoolean("team.enabled", true);
         settings.adminEnabled = config.getBoolean("admin.enabled", true);
         settings.adminGuiEnabled = config.getBoolean("admin.enable-gui", true);
+        settings.adminAutoSnapshot = config.getBoolean("admin.auto-snapshot", true);
         settings.showTeamCommands = config.getBoolean("show-team-commands", true);
         settings.showAdminCommands = config.getBoolean("show-admin-commands", true);
         settings.liveConfigReload = config.getBoolean("live-config-reload", true);
@@ -110,6 +112,10 @@ final class PluginSettings {
 
     boolean adminGuiEnabled() {
         return adminGuiEnabled;
+    }
+
+    boolean adminAutoSnapshot() {
+        return adminAutoSnapshot;
     }
 
     boolean showTeamCommands() {

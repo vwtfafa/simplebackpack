@@ -53,6 +53,7 @@ public class Backpack extends JavaPlugin implements Listener {
                 teamRegistry, settings.teamEnabled());
         manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
                 settings.disabledWorlds());
+        manager.setAdminSnapshotEnabled(settings.adminAutoSnapshot());
         getServer().getPluginManager().registerEvents(this, this);
         registerCommands();
         if (settings.adminEnabled() && settings.adminGuiEnabled()) {
@@ -107,6 +108,7 @@ public class Backpack extends JavaPlugin implements Listener {
                 settings.teamEnabled());
         manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
                 settings.disabledWorlds());
+        manager.setAdminSnapshotEnabled(settings.adminAutoSnapshot());
     }
 
     @EventHandler

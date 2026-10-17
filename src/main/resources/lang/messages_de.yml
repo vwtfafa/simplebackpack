@@ -32,6 +32,7 @@ already-in-team: "<red>Du bist bereits in einem Team. Verlasse es zuerst mit /le
 share-self: "<red>Du kannst deinen Rucksack nicht mit dir selbst teilen."
 team-invite-recv: "<green>{player} hat dich zu seinem Team eingeladen! Tippe /team accept um beizutreten."
 team-joined: "<green>Du bist {player}'s Team beigetreten!"
+team-member-joined: "<green>{player} ist deinem Team beigetreten!"
 team-pending: "<green>Du hast eine Einladung von {player}! Tippe /team accept um beizutreten."
 team-invite-expired: "<red>Deine Teameinladung ist abgelaufen."
 team-disabled: "<red>Teams sind in der Konfiguration deaktiviert."

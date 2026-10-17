@@ -72,6 +72,9 @@ public class BackpackManager implements Listener {
     private volatile boolean usageEnabled = true;
     private volatile boolean usageAllowCreative;
     private volatile List<String> usageDisabledWorlds = List.of();
+    // Cached admin.auto-snapshot flag; snapshots are taken inside the async
+    // write itself so admin edits never block the main thread with file I/O.
+    private volatile boolean adminSnapshotEnabled = true;
     Map<UUID, SharedSession> sharedSessions = new ConcurrentHashMap<>();
     // Owners whose backpack an inventory-close event just persisted; lets the
     // quit-time autosave skip the redundant second write on disconnects
@@ -587,7 +590,8 @@ public class BackpackManager implements Listener {
                     Files.move(auditLogFile.toPath(), rotated.toPath(), StandardCopyOption.REPLACE_EXISTING);
                     auditLogFile.createNewFile();
                 }
-                try (FileWriter fw = new FileWriter(auditLogFile, true); PrintWriter pw = new PrintWriter(fw)) {
+                try (FileWriter fw = new FileWriter(auditLogFile, java.nio.charset.StandardCharsets.UTF_8, true);
+                     PrintWriter pw = new PrintWriter(fw)) {
                     pw.println(line);
                 }
             } catch (IOException e) {
@@ -824,6 +828,13 @@ public class BackpackManager implements Listener {
     }
 
     /**
+     * Refreshes the cached admin.auto-snapshot flag after (re)loads.
+     */
+    public void setAdminSnapshotEnabled(boolean enabled) {
+        this.adminSnapshotEnabled = enabled;
+    }
+
+    /**
      * Returns the message key explaining why the player may not use their
      * backpack right now, or null when usage is allowed.
      */
@@ -1024,22 +1035,6 @@ public class BackpackManager implements Listener {
                 for (int i = 0; i < Math.min(stored.getSize(), top.getSize()); i++) {
                     stored.setItem(i, top.getItem(i));
                 }
-                // optionally create a snapshot before saving (config: admin.auto-snapshot)
-                boolean doSnapshot = plugin.getConfig().getBoolean("admin.auto-snapshot", true);
-                if (doSnapshot) {
-                    try {
-                        File snapshotsDir = new File(plugin.getDataFolder(), "backups/snapshots");
-                        if (!snapshotsDir.exists()) snapshotsDir.mkdirs();
-                        File src = new File(dataFolder, owner + ".yml");
-                        if (src.exists()) {
-                            String ts = String.valueOf(System.currentTimeMillis());
-                            File dest = new File(snapshotsDir, owner + "-" + ts + ".yml");
-                            java.nio.file.Files.copy(src.toPath(), dest.toPath());
-                            logAudit("SNAPSHOT " + owner.toString() + " -> " + dest.getName());
-                        }
-                    } catch (IOException ignored) {}
-                }
-
                 saveInventoryAsync(owner, snapshot(stored), "admin", () -> { });
                 logAudit("ADMIN_SAVE " + viewer.getName() + " -> " + owner.toString());
                 return;
@@ -1164,6 +1159,9 @@ public class BackpackManager implements Listener {
             }
             File file = new File(dataFolder, owner + ".yml");
             try {
+                if (adminSnapshotEnabled && source.startsWith("admin")) {
+                    createSnapshot(owner);
+                }
                 YamlConfiguration config = new YamlConfiguration();
                 for (int i = 0; i < contents.length; i++) config.set("slot" + i, contents[i]);
                 writeYamlFile(config, file);
@@ -1175,6 +1173,31 @@ public class BackpackManager implements Listener {
                         "Failed to save backpack " + owner + " from " + source, e);
                 return false;
             }
+        }
+    }
+
+    /**
+     * Keeps a timestamped copy of the current backpack file before an admin
+     * write replaces it. Runs inside the save lock (on the async write
+     * thread) so the snapshot always captures the state before this write.
+     */
+    private void createSnapshot(UUID owner) {
+        File source = new File(dataFolder, owner + ".yml");
+        if (!source.exists()) {
+            return;
+        }
+        File snapshotsDir = new File(plugin.getDataFolder(), "backups/snapshots");
+        if (!snapshotsDir.exists() && !snapshotsDir.mkdirs()) {
+            plugin.getLogger().warning("Failed to create snapshot directory: " + snapshotsDir);
+            return;
+        }
+        File target = new File(snapshotsDir, owner + "-" + System.currentTimeMillis() + ".yml");
+        try {
+            Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            logAudit("SNAPSHOT " + owner + " -> " + target.getName());
+        } catch (IOException e) {
+            plugin.getLogger().warning("Failed to create snapshot for backpack " + owner
+                    + ": " + e.getMessage());
         }
     }
 
