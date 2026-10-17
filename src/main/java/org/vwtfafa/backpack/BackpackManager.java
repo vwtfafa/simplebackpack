@@ -151,16 +151,15 @@ public class BackpackManager implements Listener {
         // check if this player has a temporary share to another owner's backpack
         SharedSession session = sharedSessions.get(uuid);
         if (session != null && !session.isExpired()) {
-            UUID owner = session.owner();
-            return backpacks.computeIfAbsent(owner, u -> loadBackpack(owner));
+            return loadBackpackSafely(session.owner());
         }
         if (teamEnabled) {
             UUID teamOwner = getTeamOwner(uuid);
             if (!teamOwner.equals(uuid)) {
-                return backpacks.computeIfAbsent(teamOwner, u -> loadBackpack(teamOwner));
+                return loadBackpackSafely(teamOwner);
             }
         }
-        return backpacks.computeIfAbsent(uuid, u -> loadBackpack(uuid));
+        return loadBackpackSafely(uuid);
     }
 
     /**

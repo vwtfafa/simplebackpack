@@ -135,8 +135,12 @@ public class Backpack extends JavaPlugin implements Listener {
         // Warm the cache so the first open doesn't wait on disk I/O
         Player player = event.getPlayer();
         manager.refreshPlayerName(player.getUniqueId(), player.getName());
-        manager.preloadBackpack(player.getUniqueId());
-        manager.preloadBackpack(manager.resolveEffectiveOwner(player.getUniqueId()));
+        UUID own = player.getUniqueId();
+        manager.preloadBackpack(own);
+        UUID effective = manager.resolveEffectiveOwner(own);
+        if (!effective.equals(own)) {
+            manager.preloadBackpack(effective);
+        }
     }
 
     @EventHandler
