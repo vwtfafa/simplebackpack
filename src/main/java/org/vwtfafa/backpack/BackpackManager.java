@@ -409,9 +409,11 @@ public class BackpackManager implements Listener {
 
     /**
      * Re-ingests a previously written {@code *.overflow.yml} sidecar into a
-     * freshly loaded backpack. Items that fit are restored, the sidecar is
-     * deleted only when fully drained; anything still not fitting is kept in
+     * freshly loaded backpack. Items that fit are restored and persisted
+     * before the sidecar is dropped; anything still not fitting is kept in
      * a rewritten sidecar so repeated shrinks never silently eat items.
+     * Unreadable sidecars are preserved as {@code .corrupt-<ts>} files
+     * instead of being deleted.
      */
     private void restoreOverflow(UUID uuid, Inventory inv) {
         File sidecar = new File(dataFolder, uuid + ".overflow.yml");
@@ -430,14 +432,31 @@ public class BackpackManager implements Listener {
             }
         }
         if (stored.isEmpty()) {
-            if (sidecar.delete()) {
+            if (sidecar.length() == 0 && sidecar.delete()) {
                 plugin.getLogger().info("Removed empty overflow file for backpack " + uuid + ".");
+            } else if (sidecar.length() > 0) {
+                // A non-empty file that yields no items may be corrupt or
+                // half-written; keep it for manual recovery instead of
+                // silently deleting stored items.
+                File kept = new File(dataFolder, uuid + ".overflow.yml.corrupt-" + System.currentTimeMillis());
+                try {
+                    Files.move(sidecar.toPath(), kept.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    plugin.getLogger().warning("Unreadable overflow file for backpack %s kept as %s."
+                            .formatted(uuid, kept.getName()));
+                    logAudit("OVERFLOW_CORRUPT " + uuid + " -> " + kept.getName());
+                } catch (IOException e) {
+                    plugin.getLogger().severe("Failed to preserve unreadable overflow file for backpack %s: %s"
+                            .formatted(uuid, e.getMessage()));
+                }
             }
             return;
         }
         Map<Integer, ItemStack> rest = inv.addItem(stored.toArray(new ItemStack[0]));
         if (rest.isEmpty()) {
-            if (sidecar.delete()) {
+            // Persist the restored items before dropping the sidecar so a
+            // crash cannot lose them.
+            long sequence = nextSaveSequence(uuid);
+            if (writeInventory(uuid, snapshot(inv), "overflow-restore", sequence) && sidecar.delete()) {
                 plugin.getLogger().info("Restored %s overflow item(s) into backpack %s."
                         .formatted(stored.size(), uuid));
                 logAudit("OVERFLOW_RESTORED " + uuid + " (" + stored.size() + " items)");
@@ -454,7 +473,7 @@ public class BackpackManager implements Listener {
             rewritten.set("slot" + slot++, item);
         }
         try {
-            rewritten.save(sidecar);
+            writeYamlFile(rewritten, sidecar);
             plugin.getLogger().warning("Restored %s overflow item(s) into backpack %s; %s item(s) remain in %s."
                     .formatted(stored.size() - rest.size(), uuid, rest.size(), sidecar.getName()));
         } catch (IOException e) {
@@ -496,7 +515,7 @@ public class BackpackManager implements Listener {
             overflowConfig.set("slot" + slot++, item);
         }
         try {
-            overflowConfig.save(overflowFile);
+            writeYamlFile(overflowConfig, overflowFile);
             plugin.getLogger().warning("Backpack %s shrank below its stored contents; %s item(s) saved to %s."
                     .formatted(owner, items.size(), overflowFile.getName()));
             logAudit("OVERFLOW " + owner.toString() + " -> " + overflowFile.getName()
@@ -1099,31 +1118,46 @@ public class BackpackManager implements Listener {
         plugin.getServer().getGlobalRegionScheduler().run(plugin, task -> callback.run());
     }
 
-    private void writeInventory(UUID owner, ItemStack[] contents, String source, long sequence) {
+    /**
+     * Writes the backpack file through a temp file and an atomic move.
+     * Returns false when the write was skipped because a newer write already
+     * happened, or when it failed.
+     */
+    private boolean writeInventory(UUID owner, ItemStack[] contents, String source, long sequence) {
         synchronized (saveIoLock) {
             Long latest = saveSequences.get(owner);
             if (latest != null && sequence < latest) {
                 plugin.getLogger().fine("Skipping stale " + source + " save for backpack " + owner
                         + " (sequence " + sequence + " < " + latest + ").");
-                return;
+                return false;
             }
             File file = new File(dataFolder, owner + ".yml");
-            File temporaryFile = new File(dataFolder, owner + ".yml.tmp");
             try {
                 YamlConfiguration config = new YamlConfiguration();
                 for (int i = 0; i < contents.length; i++) config.set("slot" + i, contents[i]);
-                config.save(temporaryFile);
-                try {
-                    Files.move(temporaryFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING,
-                            StandardCopyOption.ATOMIC_MOVE);
-                } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
-                    Files.move(temporaryFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                }
+                writeYamlFile(config, file);
                 saveSequences.put(owner, sequence);
+                return true;
             } catch (IOException e) {
                 plugin.getLogger().log(java.util.logging.Level.SEVERE,
                         "Failed to save backpack " + owner + " from " + source, e);
+                return false;
             }
+        }
+    }
+
+    /**
+     * Writes a YAML file through a temp file and an atomic move so a crash
+     * mid-write cannot corrupt the previous contents.
+     */
+    private void writeYamlFile(YamlConfiguration config, File file) throws IOException {
+        File temporary = new File(file.getParentFile(), file.getName() + ".tmp");
+        config.save(temporary);
+        try {
+            Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+            Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
