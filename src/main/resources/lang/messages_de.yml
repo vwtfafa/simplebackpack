@@ -34,6 +34,7 @@ team-invite-recv: "<green>{player} hat dich zu seinem Team eingeladen! Tippe /te
 team-joined: "<green>Du bist {player}'s Team beigetreten!"
 team-pending: "<green>Du hast eine Einladung von {player}! Tippe /team accept um beizutreten."
 team-invite-expired: "<red>Deine Teameinladung ist abgelaufen."
+team-disabled: "<red>Teams sind in der Konfiguration deaktiviert."
 preview-mode: "<red>Nur Vorschau - keine Änderungen erlaubt."
 config-changed-name: "<green>Rucksack-Name geändert."
 config-invalid-name: "<red>Bitte gib einen Rucksack-Namen ein."

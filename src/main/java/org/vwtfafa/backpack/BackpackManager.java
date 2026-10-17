@@ -805,6 +805,22 @@ public class BackpackManager implements Listener {
         this.usageEnabled = enabled;
         this.usageAllowCreative = allowInCreative;
         this.usageDisabledWorlds = disabledWorlds != null ? List.copyOf(disabledWorlds) : List.of();
+        // The policy may just have become stricter (disable command, reload
+        // with new disabled worlds); close open user views that are illegal
+        // now instead of letting them stay usable.
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            String blocked = usageBlockReason(online);
+            if (blocked == null
+                    || !(online.getOpenInventory().getTopInventory().getHolder()
+                    instanceof BackpackInventoryHolder holder)) {
+                continue;
+            }
+            if (holder.getType() == BackpackInventoryHolder.Type.BACKPACK
+                    || holder.getType() == BackpackInventoryHolder.Type.CONFIG) {
+                online.closeInventory();
+                messages.send(online, blocked);
+            }
+        }
     }
 
     /**

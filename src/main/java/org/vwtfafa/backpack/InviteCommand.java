@@ -42,6 +42,12 @@ final class InviteCommand extends SubCommand {
             plugin.messages().send(player, "invite-self");
             return;
         }
+        // Teams may have been disabled by a live reload after this command
+        // was registered.
+        if (!plugin.teamEnabled()) {
+            plugin.messages().send(player, "team-disabled");
+            return;
+        }
         UUID owner = plugin.teamRegistry().findOwner(player.getUniqueId());
         if (owner != null && plugin.teamRegistry().membersOf(owner).size() >= plugin.teamMaxSize()) {
             plugin.messages().send(player, "team-full");

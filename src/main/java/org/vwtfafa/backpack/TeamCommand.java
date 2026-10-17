@@ -50,6 +50,12 @@ final class TeamCommand extends SubCommand {
             showTeamInfo(player);
             return;
         }
+        // Teams may have been disabled by a live reload; accepting then would
+        // create a team that no longer has a shared backpack.
+        if (!plugin.teamEnabled()) {
+            plugin.messages().send(player, "team-disabled");
+            return;
+        }
         if (invite.isExpired()) {
             plugin.pendingInvites().remove(targetId);
             plugin.messages().send(player, "team-invite-expired");

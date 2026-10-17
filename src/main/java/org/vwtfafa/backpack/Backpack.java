@@ -72,16 +72,16 @@ public class Backpack extends JavaPlugin implements Listener {
             if (!settings.classicMode()) {
                 registrar.register(new BackpackConfigCommand(this).node(),
                         "Open the backpack configuration GUI", List.of());
+                registrar.register(new BackpackReloadCommand(this).node(),
+                        "Reloads the SimpleBackpack config", List.of());
             }
-            registrar.register(new BackpackReloadCommand(this).node(),
-                    "Reloads the SimpleBackpack config", List.of());
             if (settings.teamEnabled() && settings.showTeamCommands() && !settings.classicMode()) {
                 registrar.register(new InviteCommand(this).node(), "Invite a player to your team", List.of());
                 registrar.register(new TeamCommand(this).node(), "Show your team members or accept an invite",
                         List.of());
                 registrar.register(new LeaveCommand(this).node(), "Leave your current team", List.of());
             }
-            if (settings.adminEnabled() && settings.showAdminCommands()) {
+            if (settings.adminEnabled() && settings.showAdminCommands() && !settings.classicMode()) {
                 registrar.register(new BackpackAdminCommand(this).node(),
                         "Admin commands for SimpleBackpack", List.of());
             }
@@ -178,6 +178,10 @@ public class Backpack extends JavaPlugin implements Listener {
 
     int teamMaxSize() {
         return settings.teamMaxSize();
+    }
+
+    boolean teamEnabled() {
+        return settings.teamEnabled();
     }
 
     boolean backpacksEnabled() {

@@ -34,6 +34,7 @@ team-invite-recv: "<green>{player} has invited you to their team! Type /team acc
 team-joined: "<green>You have joined {player}'s team!"
 team-pending: "<green>You have a pending invite from {player}! Type /team accept to join."
 team-invite-expired: "<red>Your team invite has expired."
+team-disabled: "<red>Teams are disabled in the configuration."
 preview-mode: "<red>Preview mode - changes are not allowed."
 config-changed-name: "<green>Backpack name changed."
 config-invalid-name: "<red>Please enter a backpack name."
