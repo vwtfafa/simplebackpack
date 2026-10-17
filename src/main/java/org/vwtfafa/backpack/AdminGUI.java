@@ -127,7 +127,7 @@ public class AdminGUI implements Listener {
         if (slot == SLOT_INFO || slot == SLOT_PREVIOUS || slot == SLOT_NEXT) return;
 
         ItemStack clicked = event.getCurrentItem();
-        if (clicked == null || !clicked.hasItemMeta()) return;
+        if (clicked == null || clicked.isEmpty()) return;
         String uuidStr = clicked.getItemMeta().getPersistentDataContainer()
                 .get(ownerKey, PersistentDataType.STRING);
         if (uuidStr == null) return;

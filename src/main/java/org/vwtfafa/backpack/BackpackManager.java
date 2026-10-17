@@ -216,7 +216,7 @@ public class BackpackManager implements Listener {
             List<ItemStack> homeless = new ArrayList<>();
             for (int i = keptSlots; i < oldInv.getSize(); i++) {
                 ItemStack item = oldInv.getItem(i);
-                if (item == null || item.getType().isAir()) {
+                if (item == null || item.isEmpty()) {
                     continue;
                 }
                 if (ownerPlayer != null) {
@@ -251,7 +251,7 @@ public class BackpackManager implements Listener {
         List<ItemStack> overflow = new ArrayList<>();
         for (int i = newSize; i < oldInv.getSize(); i++) {
             ItemStack item = oldInv.getItem(i);
-            if (item != null && !item.getType().isAir()) {
+            if (item != null && !item.isEmpty()) {
                 overflow.add(item);
             }
         }
@@ -264,7 +264,7 @@ public class BackpackManager implements Listener {
         Player storage = owner != null ? owner : player;
         int freeSlots = 0;
         for (ItemStack content : storage.getInventory().getStorageContents()) {
-            if (content == null || content.getType().isAir()) {
+            if (content == null || content.isEmpty()) {
                 freeSlots++;
             }
         }
@@ -367,7 +367,7 @@ public class BackpackManager implements Listener {
         List<ItemStack> homeless = new ArrayList<>();
         for (int i = 0; i < Math.min(contents.length, MAX_BACKPACK_SIZE); i++) {
             ItemStack item = contents[i];
-            if (item == null || item.getType().isAir()) {
+            if (item == null || item.isEmpty()) {
                 continue;
             }
             if (i < backpackSize) {
@@ -438,7 +438,7 @@ public class BackpackManager implements Listener {
             if (item == null) {
                 break;
             }
-            if (!item.getType().isAir()) {
+            if (!item.isEmpty()) {
                 stored.add(item);
             }
         }
@@ -502,7 +502,7 @@ public class BackpackManager implements Listener {
     private void storeOverflow(UUID owner, Collection<ItemStack> items) {
         List<ItemStack> fresh = new ArrayList<>();
         for (ItemStack item : items) {
-            if (item != null && !item.getType().isAir()) {
+            if (item != null && !item.isEmpty()) {
                 fresh.add(item);
             }
         }
@@ -699,9 +699,7 @@ public class BackpackManager implements Listener {
             return;
         }
         Inventory inv = getBackpack(player);
-        for (int i = 0; i < inv.getSize(); i++) {
-            inv.setItem(i, null);
-        }
+        inv.clear();
         saveInventoryAsync(ownerId, snapshot(inv), "death", () -> { });
     }
 
@@ -715,9 +713,7 @@ public class BackpackManager implements Listener {
     public UUID clearForAdmin(UUID targetId, org.bukkit.command.CommandSender admin) {
         UUID ownerId = resolveOwnedBackpack(targetId);
         Inventory inv = loadBackpackSafely(ownerId);
-        for (int i = 0; i < inv.getSize(); i++) {
-            inv.setItem(i, null);
-        }
+        inv.clear();
         saveInventoryAsync(ownerId, snapshot(inv), "admin-clear", () -> { });
         logAudit("ADMIN_CLEAR " + admin.getName() + " -> " + ownerId.toString());
         return ownerId;

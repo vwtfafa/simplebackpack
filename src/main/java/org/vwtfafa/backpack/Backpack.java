@@ -120,10 +120,10 @@ public class Backpack extends JavaPlugin implements Listener {
         // Greet genuinely new players exactly once; the PDC flag also covers
         // players who joined before this option existed
         PersistentDataContainer pdc = player.getPersistentDataContainer();
-        if (player.hasPlayedBefore() || pdc.has(firstJoinKey, PersistentDataType.BYTE)) {
+        if (player.hasPlayedBefore() || pdc.has(firstJoinKey, PersistentDataType.BOOLEAN)) {
             return;
         }
-        pdc.set(firstJoinKey, PersistentDataType.BYTE, (byte) 1);
+        pdc.set(firstJoinKey, PersistentDataType.BOOLEAN, true);
         messages.send(player, "first-join");
     }
 
