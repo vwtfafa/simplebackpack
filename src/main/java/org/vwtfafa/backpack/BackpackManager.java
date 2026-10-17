@@ -270,6 +270,22 @@ public class BackpackManager implements Listener {
     }
 
     /**
+     * Resolves the backpack a player owns: their team's backpack when they
+     * are in a team, otherwise their own. Unlike {@link #resolveEffectiveOwner}
+     * this ignores temporary share sessions, so admin actions like clearing
+     * never touch a backpack the player may only be viewing through a share.
+     */
+    public UUID resolveOwnedBackpack(UUID playerId) {
+        if (teamEnabled) {
+            UUID teamOwner = getTeamOwner(playerId);
+            if (!teamOwner.equals(playerId)) {
+                return teamOwner;
+            }
+        }
+        return playerId;
+    }
+
+    /**
      * Resolves the effective owner of a player's backpack.
      * Returns the team owner if the player is in a team, or the session owner if they have a share.
      * Otherwise returns the player's own UUID.
@@ -654,16 +670,21 @@ public class BackpackManager implements Listener {
     }
 
     /**
-     * Wipes the backpack of the given effective owner on behalf of an admin
-     * and persists the empty state asynchronously.
+     * Wipes the backpack the given player actually owns on behalf of an
+     * admin (the team backpack for team members, never a backpack the
+     * player only has temporary share access to) and persists the empty
+     * state asynchronously. Returns the owner whose backpack was cleared
+     * so callers can report the correct name.
      */
-    public void clearForAdmin(UUID ownerId, org.bukkit.command.CommandSender admin) {
-        Inventory inv = backpacks.computeIfAbsent(ownerId, u -> loadBackpack(ownerId));
+    public UUID clearForAdmin(UUID targetId, org.bukkit.command.CommandSender admin) {
+        UUID ownerId = resolveOwnedBackpack(targetId);
+        Inventory inv = loadBackpackSafely(ownerId);
         for (int i = 0; i < inv.getSize(); i++) {
             inv.setItem(i, null);
         }
         saveInventoryAsync(ownerId, snapshot(inv), "admin-clear", () -> { });
         logAudit("ADMIN_CLEAR " + admin.getName() + " -> " + ownerId.toString());
+        return ownerId;
     }
 
     public void setConfig(String backpackName, int backpackSize, boolean teamEnabled) {
