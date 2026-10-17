@@ -1,5 +1,36 @@
 # Changelog
 
+## 7.2.1 - 2026-10-17
+
+### Changed
+- Updated the Paper API to `26.3.build.200-stable` (compile and test dependency; `runServer` stays on `26.3`) and bumped the Gradle wrapper from `9.8.0` to `9.8.1`.
+- Bumped plugin version to 7.2.1 and corrected the compatibility documentation to Paper 26.3 (`CLAUDE.md`).
+
+### Fixed
+- Item loss when the backpack GUI was rebuilt (resize) before the backpack was cached: the stored file is now loaded first instead of saving a fresh empty inventory over it.
+- `/backpackadmin clear <player>` and `/backpackshare <player>` now use the backpack the player actually owns (team backpack yes, temporary shares no); the clear message names the owner that was really cleared.
+- Team backpacks now move to the successor when the team owner leaves (views closed, files rekeyed; an existing successor file is kept as `.bak`) instead of staying on the leaving player's UUID.
+- Admin edit views track a per-owner revision and discard stale changes on close (close saves, resizes, death clears, admin clears); the conflict message names the affected owner.
+- Join preload and on-demand load share one install path: overflow sidecars are drained in both cases, items from removed slots are recovered instead of dropped, and unreadable files fall back to the blocking load.
+- Overflow sidecars are written atomically, unreadable sidecars are preserved as `.corrupt-<timestamp>` instead of deleted, and restored overflow is persisted before the sidecar is dropped.
+- `teams.yml` falls back to `teams.yml.bak` when the main file is unreadable; a corrupt file is quarantined instead of overwriting the last good backup, and saves are atomic.
+- Quit autosaves are only skipped when the previous save finished and nothing was reopened; opening the backpack clears the dedup marker so later changes within the 2 s window still reach disk.
+- Open backpack views (and the config GUI) are closed when the usage policy becomes stricter through a reload or the disable command.
+- Team join feedback: the inviter now gets a dedicated "joined your team" message (`team-member-joined`) instead of the joiner text, and invitations survive a failed join (team full) so they can be retried.
+- Classic mode also hides `/backpackreload` and `/backpackadmin` as documented; `/invite` and `/team accept` re-check `team.enabled` after live reloads (new `team-disabled` message).
+- Admin snapshots are created inside the async save (collision-free, off the main thread, failures logged); the audit log is written as UTF-8.
+- Backpack, overflow and team files carry a `version: 1` format marker for future migrations.
+
+### Performance
+- Backpack loading no longer performs disk I/O inside map computations, and duplicate preloads for solo players are skipped.
+- Audit timestamps use a cached formatter, missing message keys are warned once per reload, and admin list paging reuses the scan of the opened list instead of rescanning per page.
+
+### Refactored
+- Modern API shortcuts: `ItemStack#isEmpty()`, `Inventory#clear()`, `PersistentDataType.BOOLEAN`.
+
+### Verification
+- `./gradlew build` (compilation, JUnit tests, Checkstyle, SpotBugs) passes after every change; new/updated tests cover team successor reporting and the `teams.yml` backup fallback.
+
 ## 7.2 - 2026-10-03
 
 ### Changed
