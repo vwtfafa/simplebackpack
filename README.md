@@ -5,6 +5,7 @@ A persistent, configurable backpack plugin for Minecraft Paper.
 ## Features
 
 - **Personal Persistent Backpacks** - Per-player backpacks with configurable size, name and color
+- **Permission Size Tiers** - Grant larger (or smaller) backpacks through configurable permission nodes
 - **Team Backpacks** - Create/invite/share backpacks with simple team commands (invites expire after 5 minutes)
 - **Classic Mode** - Minimal mode with only `/backpack` and `/bp`
 - **Admin Tools** - Admin GUI with pagination, admin edits, audit logging
@@ -13,7 +14,7 @@ A persistent, configurable backpack plugin for Minecraft Paper.
 - **Brigadier Commands** - Registered via Paper's Brigadier lifecycle API with tab completion
 - **Update Checker** - Notifies operators when updates are available on GitHub
 - **bStats Metrics** - Anonymous statistics tracking (plugin ID: 32528)
-- **Unit Tests** - JUnit 5 tests for core functionality
+- **Unit Tests** - JUnit tests for core functionality
 
 ## Installation
 
@@ -68,6 +69,7 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 ### Backpack Settings
 - `backpack.name` - Inventory title (MiniMessage like `<aqua>`, or legacy `§` codes)
 - `backpack.size` - Backpack size (9, 18, 27, 36, 45, or 54)
+- `backpack.permission-sizes` - Optional permission-to-size tiers; the largest matching tier wins
 - `backpack.allow-in-creative` - Allow backpack use in creative mode
 - `backpack.auto-save-on-quit` - Auto-save when player disconnects
 - `backpack.keep-on-death` - Keep contents on death
@@ -75,6 +77,20 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 - `backpack.open-sound` - Play a sound when opening the backpack
 - `backpack.first-join-message` - One-time welcome message for new players
 - `backpack.disabled-worlds` - World names where `/backpack` cannot be used, e.g. `[example_world]`
+
+Example permission tiers:
+
+```yaml
+backpack:
+  size: 27
+  permission-sizes:
+    - permission: "simplebackpack.size.36"
+      size: 36
+    - permission: "simplebackpack.size.54"
+      size: 54
+```
+
+If a player has several configured permissions, the largest matching size is used when their backpack is opened. For team and temporarily shared backpacks, the backpack owner's permissions determine the size; the saved inventory size is retained while that owner is offline. Items that do not fit after a size reduction are preserved in overflow storage.
 
 ### Team Settings
 - `team.enabled` - Enable team functionality

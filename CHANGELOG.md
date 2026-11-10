@@ -1,5 +1,14 @@
 # Changelog
 
+## 7.3.0 - 2026-11-10
+
+### Added
+- Configurable permission-based backpack size tiers; the largest granted tier determines the backpack size, shared backpacks use their owner's permissions, and the active size is stored with backpack data.
+
+### Changed
+- Updated the Paper API to `26.3.build.248-stable`, Gson to `2.15.0`, SpotBugs Gradle plugin/tool to `6.5.13`/`4.10.5`, Checkstyle to `14.4.0`, and Gradle wrapper to `9.9.1`.
+- Bumped plugin version to 7.3.0.
+
 ## 7.2.1 - 2026-10-17
 
 ### Changed

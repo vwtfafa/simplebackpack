@@ -50,10 +50,12 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
 public class BackpackManager implements Listener {
+    private record StoredBackpack(ItemStack[] contents, int size) { }
+
     private static final int MIN_BACKPACK_SIZE = 9;
     private static final int MAX_BACKPACK_SIZE = 54;
     private static final int MAX_NAME_LENGTH = 64;
-    private static final int STORAGE_VERSION = 1;
+    private static final int STORAGE_VERSION = 2;
     private static final long AUDIT_LOG_MAX_BYTES = 5L * 1024L * 1024L;
     private static final DateTimeFormatter AUDIT_TIMESTAMP =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -69,6 +71,7 @@ public class BackpackManager implements Listener {
     private final File dataFolder;
     private volatile String backpackName;
     private volatile int backpackSize;
+    private volatile Map<String, Integer> backpackPermissionSizes = Map.of();
     // Usage policy snapshot (worlds, creative, global toggle): enforced on
     // open and re-checked when players change world or game mode, so an open
     // backpack cannot be carried into a restricted context.
@@ -102,10 +105,13 @@ public class BackpackManager implements Listener {
     private final Map<UUID, Long> backpackRevisions = new ConcurrentHashMap<>();
     private final Map<UUID, String> playerNameCache = new ConcurrentHashMap<>();
 
-    public BackpackManager(JavaPlugin plugin, Messages messages, String backpackName, int backpackSize, TeamRegistry teamRegistry, boolean teamEnabled) {
+    public BackpackManager(JavaPlugin plugin, Messages messages, String backpackName, int backpackSize,
+                           Map<String, Integer> backpackPermissionSizes, TeamRegistry teamRegistry,
+                           boolean teamEnabled) {
         this.plugin = plugin;
         this.messages = messages;
         this.backpackName = backpackName;
+        this.backpackPermissionSizes = Map.copyOf(backpackPermissionSizes);
         this.teamRegistry = teamRegistry;
         this.teamEnabled = teamEnabled;
         this.dataFolder = new File(plugin.getDataFolder(), "backpacks");
@@ -137,9 +143,14 @@ public class BackpackManager implements Listener {
             return;
         }
         Inventory inv = getBackpack(player);
+        UUID owner = resolveEffectiveOwner(player.getUniqueId());
+        int desiredSize = getBackpackSizeForOwner(owner, inv.getSize());
+        if (inv.getSize() != desiredSize) {
+            inv = rebuildBackpack(owner, inv, desiredSize);
+        }
         // Opening makes the inventory editable again; the dedup marker of a
         // previous close save must not skip the save of later changes.
-        recentSaveOwners.remove(resolveEffectiveOwner(player.getUniqueId()));
+        recentSaveOwners.remove(owner);
         player.openInventory(inv);
         if (plugin.getConfig().getBoolean("backpack.open-sound", true)) {
             player.playSound(player.getLocation(), Sound.BLOCK_BARREL_OPEN, 1.0f, 1.0f);
@@ -185,6 +196,12 @@ public class BackpackManager implements Listener {
         // Resolve the effective owner to maintain team/share integrity
         UUID effectiveOwner = resolveEffectiveOwner(player.getUniqueId());
         Inventory oldInv = loadBackpackSafely(effectiveOwner);
+        Inventory newInv = rebuildBackpack(effectiveOwner, oldInv,
+                getBackpackSizeForOwner(effectiveOwner, backpackSize));
+        player.openInventory(newInv);
+    }
+
+    private Inventory rebuildBackpack(UUID effectiveOwner, Inventory oldInv, int newSize) {
         // Rebuilding the backpack changes the stored state: admin edit
         // copies opened earlier are invalidated and discard their changes
         // when they are closed.
@@ -202,7 +219,7 @@ public class BackpackManager implements Listener {
             viewer.closeInventory();
         }
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(effectiveOwner);
-        Inventory newInv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
+        Inventory newInv = Bukkit.createInventory(holder, newSize, titleComponent(backpackName));
         holder.setInventory(newInv);
         if (oldInv != null) {
             int keptSlots = Math.min(oldInv.getSize(), newInv.getSize());
@@ -222,9 +239,7 @@ public class BackpackManager implements Listener {
                 if (ownerPlayer != null) {
                     Map<Integer, ItemStack> leftover =
                             ownerPlayer.getInventory().addItem(item);
-                    for (ItemStack rest : leftover.values()) {
-                        ownerPlayer.getWorld().dropItemNaturally(ownerPlayer.getLocation(), rest);
-                    }
+                    homeless.addAll(leftover.values());
                 } else {
                     homeless.add(item);
                 }
@@ -232,9 +247,12 @@ public class BackpackManager implements Listener {
             if (!homeless.isEmpty()) {
                 storeOverflow(effectiveOwner, homeless);
             }
+            if (newInv.getSize() > oldInv.getSize()) {
+                restoreOverflow(effectiveOwner, newInv);
+            }
         }
         backpacks.put(effectiveOwner, newInv);
-        player.openInventory(newInv);
+        return newInv;
     }
 
     /**
@@ -317,9 +335,9 @@ public class BackpackManager implements Listener {
         }
         File file = new File(dataFolder, ownerId + ".yml");
         plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
-            ItemStack[] contents = readInventoryFile(file);
+            StoredBackpack stored = readInventoryFile(file);
             Bukkit.getGlobalRegionScheduler().run(plugin,
-                    t -> applyPreloadedContents(ownerId, contents));
+                    t -> applyPreloadedContents(ownerId, stored));
         });
     }
 
@@ -328,29 +346,36 @@ public class BackpackManager implements Listener {
      * inventories; returns null only when the file cannot be read at all
      * (the caller then falls back to the blocking load path).
      */
-    private ItemStack[] readInventoryFile(File file) {
+    private StoredBackpack readInventoryFile(File file) {
         ItemStack[] contents = new ItemStack[MAX_BACKPACK_SIZE];
         if (!file.exists()) {
-            return contents;
+            return new StoredBackpack(contents, backpackSize);
         }
         try {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
             for (int i = 0; i < MAX_BACKPACK_SIZE; i++) {
                 contents[i] = config.getItemStack("slot" + i);
             }
+            int storedSize = config.getInt("size", backpackSize);
+            if (storedSize < MIN_BACKPACK_SIZE || storedSize > MAX_BACKPACK_SIZE
+                    || storedSize % MIN_BACKPACK_SIZE != 0) {
+                plugin.getLogger().warning("Invalid stored backpack size in %s; using configured size %s."
+                        .formatted(file.getName(), backpackSize));
+                storedSize = backpackSize;
+            }
+            return new StoredBackpack(contents, storedSize);
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to preload backpack " + file.getName()
                     + ": " + e.getMessage());
             return null;
         }
-        return contents;
     }
 
-    private void applyPreloadedContents(UUID ownerId, ItemStack[] contents) {
-        if (contents == null || backpacks.containsKey(ownerId)) {
+    private void applyPreloadedContents(UUID ownerId, StoredBackpack stored) {
+        if (stored == null || backpacks.containsKey(ownerId)) {
             return;
         }
-        backpacks.put(ownerId, installContents(ownerId, contents));
+        backpacks.put(ownerId, installContents(ownerId, stored));
     }
 
     /**
@@ -360,9 +385,11 @@ public class BackpackManager implements Listener {
      * The join preload and the on-demand load share this path so recovery
      * never depends on which one ran first.
      */
-    private Inventory installContents(UUID ownerId, ItemStack[] contents) {
+    private Inventory installContents(UUID ownerId, StoredBackpack stored) {
+        ItemStack[] contents = stored.contents();
+        int size = getBackpackSizeForOwner(ownerId, stored.size());
         BackpackInventoryHolder holder = BackpackInventoryHolder.backpack(ownerId);
-        Inventory inv = Bukkit.createInventory(holder, backpackSize, titleComponent(backpackName));
+        Inventory inv = Bukkit.createInventory(holder, size, titleComponent(backpackName));
         holder.setInventory(inv);
         List<ItemStack> homeless = new ArrayList<>();
         for (int i = 0; i < Math.min(contents.length, MAX_BACKPACK_SIZE); i++) {
@@ -370,7 +397,7 @@ public class BackpackManager implements Listener {
             if (item == null || item.isEmpty()) {
                 continue;
             }
-            if (i < backpackSize) {
+            if (i < size) {
                 inv.setItem(i, item);
             } else {
                 homeless.add(item);
@@ -411,11 +438,11 @@ public class BackpackManager implements Listener {
 
     private Inventory loadBackpack(UUID uuid) {
         File file = new File(dataFolder, uuid + ".yml");
-        ItemStack[] contents = readInventoryFile(file);
-        if (contents == null) {
-            contents = new ItemStack[MAX_BACKPACK_SIZE];
+        StoredBackpack stored = readInventoryFile(file);
+        if (stored == null) {
+            stored = new StoredBackpack(new ItemStack[MAX_BACKPACK_SIZE], backpackSize);
         }
-        return installContents(uuid, contents);
+        return installContents(uuid, stored);
     }
 
     /**
@@ -627,8 +654,35 @@ public class BackpackManager implements Listener {
     }
 
     public int getBackpackSizeFor(UUID uuid) {
-        // simple: return current configured size (could be extended to per-player)
+        Inventory cached = backpacks.get(uuid);
+        if (cached != null) {
+            return cached.getSize();
+        }
+        Player player = Bukkit.getPlayer(uuid);
+        if (player != null) {
+            return getConfiguredBackpackSize(player);
+        }
         return backpackSize;
+    }
+
+    private int getBackpackSizeForOwner(UUID owner, int offlineSize) {
+        Player ownerPlayer = Bukkit.getPlayer(owner);
+        return ownerPlayer == null ? offlineSize : getConfiguredBackpackSize(ownerPlayer);
+    }
+
+    private int getConfiguredBackpackSize(Player player) {
+        return getConfiguredBackpackSize(player, backpackSize);
+    }
+
+    private int getConfiguredBackpackSize(Player player, int defaultSize) {
+        return PluginSettings.resolveBackpackSize(defaultSize, backpackPermissionSizes, player::hasPermission);
+    }
+
+    private int getBackpackSizeForOwner(UUID owner, int offlineSize, int onlineDefaultSize) {
+        Player ownerPlayer = Bukkit.getPlayer(owner);
+        return ownerPlayer == null
+                ? offlineSize
+                : getConfiguredBackpackSize(ownerPlayer, onlineDefaultSize);
     }
 
     /**
@@ -789,13 +843,15 @@ public class BackpackManager implements Listener {
         }
     }
 
-    public void setConfig(String backpackName, int backpackSize, boolean teamEnabled) {
+    public void setConfig(String backpackName, int backpackSize, Map<String, Integer> backpackPermissionSizes,
+                          boolean teamEnabled) {
         if (backpackName != null && !backpackName.isBlank()) {
             this.backpackName = backpackName;
         } else {
             plugin.getLogger().warning("Ignoring invalid backpack name from config reload; keeping previous value.");
         }
         this.backpackSize = validateBackpackSize(backpackSize);
+        this.backpackPermissionSizes = Map.copyOf(backpackPermissionSizes);
         this.teamEnabled = teamEnabled;
     }
 
@@ -932,7 +988,9 @@ public class BackpackManager implements Listener {
                     int newSize = (this.backpackSize == MAX_BACKPACK_SIZE)
                         ? MIN_BACKPACK_SIZE
                         : this.backpackSize + MIN_BACKPACK_SIZE;
-                    if (canShrinkSafely(player, validateBackpackSize(newSize))) {
+                    UUID owner = resolveEffectiveOwner(player.getUniqueId());
+                    int effectiveSize = getBackpackSizeForOwner(owner, newSize, newSize);
+                    if (canShrinkSafely(player, effectiveSize)) {
                         this.backpackSize = validateBackpackSize(newSize);
                         saveConfigValue("backpack.size", this.backpackSize);
                         updateBackpackGUI(player);
@@ -1163,6 +1221,7 @@ public class BackpackManager implements Listener {
                 }
                 YamlConfiguration config = new YamlConfiguration();
                 config.set("version", STORAGE_VERSION);
+                config.set("size", contents.length);
                 for (int i = 0; i < contents.length; i++) config.set("slot" + i, contents[i]);
                 writeYamlFile(config, file);
                 saveSequences.put(owner, sequence);

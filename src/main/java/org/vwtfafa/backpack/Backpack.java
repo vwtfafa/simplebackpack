@@ -50,7 +50,7 @@ public class Backpack extends JavaPlugin implements Listener {
         new Metrics(this, BSTATS_PLUGIN_ID);
         getLogger().info("bStats metrics enabled (ID: " + BSTATS_PLUGIN_ID + ")");
         manager = new BackpackManager(this, messages, settings.backpackName(), settings.backpackSize(),
-                teamRegistry, settings.teamEnabled());
+                settings.backpackPermissionSizes(), teamRegistry, settings.teamEnabled());
         manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
                 settings.disabledWorlds());
         manager.setAdminSnapshotEnabled(settings.adminAutoSnapshot());
@@ -104,7 +104,7 @@ public class Backpack extends JavaPlugin implements Listener {
         reloadConfig();
         messages.reload();
         loadConfigOptions();
-        manager.setConfig(settings.backpackName(), settings.backpackSize(),
+        manager.setConfig(settings.backpackName(), settings.backpackSize(), settings.backpackPermissionSizes(),
                 settings.teamEnabled());
         manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
                 settings.disabledWorlds());

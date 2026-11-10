@@ -3,7 +3,10 @@ package org.vwtfafa.backpack;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Predicate;
 import java.util.logging.Logger;
 
 /**
@@ -17,6 +20,7 @@ final class PluginSettings {
 
     private String backpackName = DEFAULT_BACKPACK_NAME;
     private int backpackSize = DEFAULT_BACKPACK_SIZE;
+    private Map<String, Integer> backpackPermissionSizes = Map.of();
     private boolean classicMode;
     private boolean teamEnabled = true;
     private boolean adminEnabled = true;
@@ -59,6 +63,17 @@ final class PluginSettings {
         Logger logger = plugin.getLogger();
         settings.backpackName = sanitizeBackpackName(logger, config.getString("backpack.name", settings.backpackName));
         settings.backpackSize = sanitizeBackpackSize(logger, config.getInt("backpack.size", settings.backpackSize));
+        Map<String, Integer> permissionSizes = new HashMap<>();
+        for (Map<?, ?> entry : config.getMapList("backpack.permission-sizes")) {
+            Object permission = entry.get("permission");
+            Object size = entry.get("size");
+            if (permission instanceof String permissionName && size instanceof Number number) {
+                permissionSizes.put(permissionName, number.intValue());
+            } else {
+                logger.warning("Ignoring invalid entry in backpack.permission-sizes; expected permission and size.");
+            }
+        }
+        settings.backpackPermissionSizes = sanitizePermissionSizes(logger, permissionSizes);
         settings.disabledWorlds = List.copyOf(config.getStringList("backpack.disabled-worlds"));
         return settings;
     }
@@ -82,12 +97,44 @@ final class PluginSettings {
      * falls back to the default instead of crashing {@code createInventory}.
      */
     static int sanitizeBackpackSize(Logger logger, int size) {
-        if (size >= 9 && size <= 54 && size % 9 == 0) {
+        if (isValidBackpackSize(size)) {
             return size;
         }
         logger.warning("Invalid backpack.size '%s' in config.yml; expected one of 9, 18, 27, 36, 45, 54. Falling back to %s."
                 .formatted(size, DEFAULT_BACKPACK_SIZE));
         return DEFAULT_BACKPACK_SIZE;
+    }
+
+    static Map<String, Integer> sanitizePermissionSizes(Logger logger, Map<String, Integer> configuredSizes) {
+        Map<String, Integer> sanitized = new HashMap<>();
+        for (Map.Entry<String, Integer> entry : configuredSizes.entrySet()) {
+            String permission = entry.getKey();
+            Integer size = entry.getValue();
+            if (permission == null || permission.isBlank() || size == null || !isValidBackpackSize(size)) {
+                logger.warning(("Ignoring invalid backpack.permission-sizes entry for '%s'; expected a permission "
+                        + "and a size of 9, 18, 27, 36, 45, or 54.").formatted(permission));
+                continue;
+            }
+            sanitized.put(permission.strip(), size);
+        }
+        return Map.copyOf(sanitized);
+    }
+
+    static int resolveBackpackSize(int defaultSize, Map<String, Integer> permissionSizes,
+                                   Predicate<String> hasPermission) {
+        int resolvedSize = defaultSize;
+        boolean hasSizePermission = false;
+        for (Map.Entry<String, Integer> entry : permissionSizes.entrySet()) {
+            if (hasPermission.test(entry.getKey()) && (!hasSizePermission || entry.getValue() > resolvedSize)) {
+                resolvedSize = entry.getValue();
+                hasSizePermission = true;
+            }
+        }
+        return resolvedSize;
+    }
+
+    private static boolean isValidBackpackSize(int size) {
+        return size >= 9 && size <= 54 && size % 9 == 0;
     }
 
     String backpackName() {
@@ -96,6 +143,10 @@ final class PluginSettings {
 
     int backpackSize() {
         return backpackSize;
+    }
+
+    Map<String, Integer> backpackPermissionSizes() {
+        return backpackPermissionSizes;
     }
 
     boolean classicMode() {
