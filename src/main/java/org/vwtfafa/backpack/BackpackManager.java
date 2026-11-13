@@ -797,9 +797,14 @@ public class BackpackManager implements Listener {
 
     public void clearBackpack(Player player) {
         // Only wipe backpacks the dying player owns themselves; one member
-        // must not empty a shared team or temporarily shared backpack
+        // must not empty a shared team or temporarily shared backpack.
+        // Team owners with other members also skip: keep-on-death:false must
+        // not wipe shared team storage for everyone.
         UUID ownerId = player.getUniqueId();
         if (!ownerId.equals(resolveEffectiveOwner(ownerId))) {
+            return;
+        }
+        if (teamEnabled && teamRegistry.membersOf(ownerId).size() > 1) {
             return;
         }
         Inventory inv = getBackpack(player);
