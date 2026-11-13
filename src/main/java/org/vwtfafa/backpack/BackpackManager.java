@@ -1287,7 +1287,10 @@ public class BackpackManager implements Listener {
                 config.set("size", contents.length);
                 for (int i = 0; i < contents.length; i++) config.set("slot" + i, contents[i]);
                 writeYamlFile(config, file);
-                saveSequences.put(owner, sequence);
+                // Do not put sequence back into saveSequences: nextSaveSequence
+                // already tracks the highest scheduled value. Overwriting it
+                // with a lower completed sequence would let stale writers pass
+                // the sequence < latest check.
                 completedSaveSequences.merge(owner, sequence, Math::max);
                 return true;
             } catch (IOException e) {
