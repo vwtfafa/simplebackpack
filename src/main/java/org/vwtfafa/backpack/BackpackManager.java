@@ -21,6 +21,7 @@ import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.Material;
@@ -104,6 +105,9 @@ public class BackpackManager implements Listener {
     // on, so a stale copy can never roll back newer contents.
     private final Map<UUID, Long> backpackRevisions = new ConcurrentHashMap<>();
     private final Map<UUID, String> playerNameCache = new ConcurrentHashMap<>();
+    // Owners whose on-disk backpack is unreadable and could not be quarantined;
+    // writes are refused until the bad file is moved aside so empty views cannot wipe it.
+    private final Set<UUID> blockedUnreadableOwners = ConcurrentHashMap.newKeySet();
 
     public BackpackManager(JavaPlugin plugin, Messages messages, String backpackName, int backpackSize,
                            Map<String, Integer> backpackPermissionSizes, TeamRegistry teamRegistry,
@@ -343,31 +347,70 @@ public class BackpackManager implements Listener {
 
     /**
      * Reads all stored slots off the main thread without touching
-     * inventories; returns null only when the file cannot be read at all
-     * (the caller then falls back to the blocking load path).
+     * inventories. Missing files yield an empty backpack. Unreadable files
+     * are quarantined as {@code .corrupt-<ts>} so a later save cannot wipe
+     * them; returns null only when quarantine failed and the bad file is
+     * still in place (caller must not install/save over it).
      */
     private StoredBackpack readInventoryFile(File file) {
         ItemStack[] contents = new ItemStack[MAX_BACKPACK_SIZE];
         if (!file.exists()) {
             return new StoredBackpack(contents, backpackSize);
         }
+        YamlConfiguration config = tryLoadYaml(file);
+        if (config == null) {
+            quarantineFile(file, "backpack");
+            if (file.exists()) {
+                return null;
+            }
+            return new StoredBackpack(contents, backpackSize);
+        }
+        for (int i = 0; i < MAX_BACKPACK_SIZE; i++) {
+            contents[i] = config.getItemStack("slot" + i);
+        }
+        int storedSize = config.getInt("size", backpackSize);
+        if (storedSize < MIN_BACKPACK_SIZE || storedSize > MAX_BACKPACK_SIZE
+                || storedSize % MIN_BACKPACK_SIZE != 0) {
+            plugin.getLogger().warning("Invalid stored backpack size in %s; using configured size %s."
+                    .formatted(file.getName(), backpackSize));
+            storedSize = backpackSize;
+        }
+        return new StoredBackpack(contents, storedSize);
+    }
+
+    /**
+     * Loads YAML with a throwing {@code load()} so corrupt files are never
+     * mistaken for empty configs (unlike {@code loadConfiguration}).
+     */
+    private YamlConfiguration tryLoadYaml(File file) {
+        YamlConfiguration config = new YamlConfiguration();
         try {
-            YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-            for (int i = 0; i < MAX_BACKPACK_SIZE; i++) {
-                contents[i] = config.getItemStack("slot" + i);
-            }
-            int storedSize = config.getInt("size", backpackSize);
-            if (storedSize < MIN_BACKPACK_SIZE || storedSize > MAX_BACKPACK_SIZE
-                    || storedSize % MIN_BACKPACK_SIZE != 0) {
-                plugin.getLogger().warning("Invalid stored backpack size in %s; using configured size %s."
-                        .formatted(file.getName(), backpackSize));
-                storedSize = backpackSize;
-            }
-            return new StoredBackpack(contents, storedSize);
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to preload backpack " + file.getName()
-                    + ": " + e.getMessage());
+            config.load(file);
+            return config;
+        } catch (IOException | InvalidConfigurationException e) {
+            plugin.getLogger().warning("Failed to read " + file.getName() + ": " + e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Moves an unreadable storage file aside for manual recovery instead of
+     * deleting or overwriting it.
+     */
+    private void quarantineFile(File file, String kind) {
+        if (!file.exists()) {
+            return;
+        }
+        File kept = new File(file.getParentFile(),
+                file.getName() + ".corrupt-" + System.currentTimeMillis());
+        try {
+            Files.move(file.toPath(), kept.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            plugin.getLogger().warning("Unreadable %s file %s kept as %s."
+                    .formatted(kind, file.getName(), kept.getName()));
+            logAudit("CORRUPT_" + kind.toUpperCase() + " " + file.getName() + " -> " + kept.getName());
+        } catch (IOException e) {
+            plugin.getLogger().severe("Failed to preserve unreadable %s file %s: %s"
+                    .formatted(kind, file.getName(), e.getMessage()));
         }
     }
 
@@ -440,7 +483,15 @@ public class BackpackManager implements Listener {
         File file = new File(dataFolder, uuid + ".yml");
         StoredBackpack stored = readInventoryFile(file);
         if (stored == null) {
+            // Corrupt file still on disk after a failed quarantine: install an
+            // empty view in memory, but writeInventory must refuse to replace
+            // the unreadable file so items are not wiped.
+            blockedUnreadableOwners.add(uuid);
+            plugin.getLogger().severe("Refusing to treat unreadable backpack "
+                    + file.getName() + " as empty; fix or remove the file.");
             stored = new StoredBackpack(new ItemStack[MAX_BACKPACK_SIZE], backpackSize);
+        } else {
+            blockedUnreadableOwners.remove(uuid);
         }
         return installContents(uuid, stored);
     }
@@ -458,7 +509,11 @@ public class BackpackManager implements Listener {
         if (!sidecar.exists()) {
             return;
         }
-        YamlConfiguration saved = YamlConfiguration.loadConfiguration(sidecar);
+        YamlConfiguration saved = tryLoadYaml(sidecar);
+        if (saved == null) {
+            quarantineFile(sidecar, "overflow");
+            return;
+        }
         List<ItemStack> stored = new ArrayList<>();
         for (int i = 0; ; i++) {
             ItemStack item = saved.getItemStack("slot" + i);
@@ -473,19 +528,8 @@ public class BackpackManager implements Listener {
             if (sidecar.length() == 0 && sidecar.delete()) {
                 plugin.getLogger().info("Removed empty overflow file for backpack " + uuid + ".");
             } else if (sidecar.length() > 0) {
-                // A non-empty file that yields no items may be corrupt or
-                // half-written; keep it for manual recovery instead of
-                // silently deleting stored items.
-                File kept = new File(dataFolder, uuid + ".overflow.yml.corrupt-" + System.currentTimeMillis());
-                try {
-                    Files.move(sidecar.toPath(), kept.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    plugin.getLogger().warning("Unreadable overflow file for backpack %s kept as %s."
-                            .formatted(uuid, kept.getName()));
-                    logAudit("OVERFLOW_CORRUPT " + uuid + " -> " + kept.getName());
-                } catch (IOException e) {
-                    plugin.getLogger().severe("Failed to preserve unreadable overflow file for backpack %s: %s"
-                            .formatted(uuid, e.getMessage()));
-                }
+                // Parsed YAML but no items — keep for manual recovery.
+                quarantineFile(sidecar, "overflow");
             }
             return;
         }
@@ -541,14 +585,18 @@ public class BackpackManager implements Listener {
         overflowConfig.set("version", STORAGE_VERSION);
         int slot = 0;
         if (overflowFile.exists()) {
-            YamlConfiguration existing = YamlConfiguration.loadConfiguration(overflowFile);
-            while (true) {
-                ItemStack kept = existing.getItemStack("slot" + slot);
-                if (kept == null) {
-                    break;
+            YamlConfiguration existing = tryLoadYaml(overflowFile);
+            if (existing == null) {
+                quarantineFile(overflowFile, "overflow");
+            } else {
+                while (true) {
+                    ItemStack kept = existing.getItemStack("slot" + slot);
+                    if (kept == null) {
+                        break;
+                    }
+                    overflowConfig.set("slot" + slot, kept);
+                    slot++;
                 }
-                overflowConfig.set("slot" + slot, kept);
-                slot++;
             }
         }
         for (ItemStack item : fresh) {
@@ -557,9 +605,9 @@ public class BackpackManager implements Listener {
         try {
             writeYamlFile(overflowConfig, overflowFile);
             plugin.getLogger().warning("Backpack %s shrank below its stored contents; %s item(s) saved to %s."
-                    .formatted(owner, items.size(), overflowFile.getName()));
+                    .formatted(owner, fresh.size(), overflowFile.getName()));
             logAudit("OVERFLOW " + owner.toString() + " -> " + overflowFile.getName()
-                    + " (" + items.size() + " items)");
+                    + " (" + fresh.size() + " items)");
         } catch (IOException e) {
             plugin.getLogger().severe("Failed to store overflowing backpack contents of %s: %s"
                     .formatted(owner, e.getMessage()));
@@ -1216,6 +1264,19 @@ public class BackpackManager implements Listener {
             }
             File file = new File(dataFolder, owner + ".yml");
             try {
+                // Never replace an unreadable file with a blank/fresh write —
+                // quarantine first; refuse if the bad file cannot be moved aside.
+                if (blockedUnreadableOwners.contains(owner)) {
+                    if (file.exists()) {
+                        quarantineFile(file, "backpack");
+                        if (file.exists()) {
+                            plugin.getLogger().severe("Refusing to overwrite unreadable backpack "
+                                    + file.getName() + " from " + source);
+                            return false;
+                        }
+                    }
+                    blockedUnreadableOwners.remove(owner);
+                }
                 if (adminSnapshotEnabled && source.startsWith("admin")) {
                     createSnapshot(owner);
                 }
