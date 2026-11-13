@@ -869,6 +869,14 @@ public class BackpackManager implements Listener {
             moveStorageFile(new File(dataFolder, oldOwner + ".overflow.yml"),
                     new File(dataFolder, newOwner + ".overflow.yml"));
         }
+        // Shares still pointed at the old owner UUID and would load an empty
+        // new file; retarget them to the successor so access keeps working.
+        for (Map.Entry<UUID, SharedSession> entry : sharedSessions.entrySet()) {
+            SharedSession session = entry.getValue();
+            if (session.owner().equals(oldOwner)) {
+                entry.setValue(new SharedSession(newOwner, session.expiryMillis()));
+            }
+        }
         logAudit("TRANSFER " + oldOwner + " -> " + newOwner);
     }
 
