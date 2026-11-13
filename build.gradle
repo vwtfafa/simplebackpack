@@ -45,7 +45,8 @@ tasks {
     jar {
         archiveBaseName.set("SimpleBackpack")
         archiveVersion.set(project.version.toString())
-        archiveClassifier.set("")
+        // Keep the unshaded jar distinct so releases always pick the shadow artifact.
+        archiveClassifier.set("plain")
     }
 
     shadowJar {
@@ -60,6 +61,10 @@ tasks {
         }
 
         relocate("org.bstats", "${project.group}.bstats")
+    }
+
+    build {
+        dependsOn(shadowJar)
     }
 }
 
