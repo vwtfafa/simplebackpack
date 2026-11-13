@@ -49,6 +49,11 @@ final class InviteCommand extends SubCommand {
             return;
         }
         UUID owner = plugin.teamRegistry().findOwner(player.getUniqueId());
+        // Only the team owner may invite; solo players (no team yet) create via invite.
+        if (owner != null && !owner.equals(player.getUniqueId())) {
+            plugin.messages().send(player, "invite-not-owner");
+            return;
+        }
         if (owner != null && plugin.teamRegistry().membersOf(owner).size() >= plugin.teamMaxSize()) {
             plugin.messages().send(player, "team-full");
             return;
