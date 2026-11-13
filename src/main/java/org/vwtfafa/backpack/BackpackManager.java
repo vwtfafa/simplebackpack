@@ -418,7 +418,9 @@ public class BackpackManager implements Listener {
         if (stored == null || backpacks.containsKey(ownerId)) {
             return;
         }
-        backpacks.put(ownerId, installContents(ownerId, stored));
+        // putIfAbsent (not put): a check-then-put race could replace a backpack
+        // that was opened/edited (or death-cleared) while the async preload ran.
+        backpacks.putIfAbsent(ownerId, installContents(ownerId, stored));
     }
 
     /**
