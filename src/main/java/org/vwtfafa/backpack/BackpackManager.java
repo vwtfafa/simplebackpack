@@ -41,6 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -56,7 +57,9 @@ public class BackpackManager implements Listener {
     private static final int MIN_BACKPACK_SIZE = 9;
     private static final int MAX_BACKPACK_SIZE = 54;
     private static final int MAX_NAME_LENGTH = 64;
-    private static final int STORAGE_VERSION = 2;
+    // v3 stores items as Base64 NBT via ItemStack.serializeItemsAsBytes for safer
+    // Minecraft upgrades; v1/v2 slot0..slotN YAML ItemStacks remain readable.
+    private static final int STORAGE_VERSION = 3;
     private static final long AUDIT_LOG_MAX_BYTES = 5L * 1024L * 1024L;
     private static final DateTimeFormatter AUDIT_TIMESTAMP =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -365,9 +368,8 @@ public class BackpackManager implements Listener {
             }
             return new StoredBackpack(contents, backpackSize);
         }
-        for (int i = 0; i < MAX_BACKPACK_SIZE; i++) {
-            contents[i] = config.getItemStack("slot" + i);
-        }
+        ItemStack[] loaded = readStoredItems(config, MAX_BACKPACK_SIZE);
+        System.arraycopy(loaded, 0, contents, 0, Math.min(loaded.length, MAX_BACKPACK_SIZE));
         int storedSize = config.getInt("size", backpackSize);
         if (storedSize < MIN_BACKPACK_SIZE || storedSize > MAX_BACKPACK_SIZE
                 || storedSize % MIN_BACKPACK_SIZE != 0) {
@@ -376,6 +378,76 @@ public class BackpackManager implements Listener {
             storedSize = backpackSize;
         }
         return new StoredBackpack(contents, storedSize);
+    }
+
+    /**
+     * Reads backpack/overflow item arrays. Prefers NBT byte storage (v3+);
+     * falls back to legacy {@code slotN} YAML ItemStacks.
+     */
+    private ItemStack[] readStoredItems(YamlConfiguration config, int maxSlots) {
+        if (config.getInt("version", 1) >= 3) {
+            String encoded = config.getString("items");
+            if (encoded != null && !encoded.isEmpty()) {
+                try {
+                    ItemStack[] decoded = ItemStack.deserializeItemsFromBytes(
+                            Base64.getDecoder().decode(encoded));
+                    ItemStack[] contents = new ItemStack[maxSlots];
+                    System.arraycopy(decoded, 0, contents, 0, Math.min(decoded.length, maxSlots));
+                    return contents;
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Failed to decode NBT item payload: " + e.getMessage());
+                }
+            }
+        }
+        ItemStack[] contents = new ItemStack[maxSlots];
+        for (int i = 0; i < maxSlots; i++) {
+            contents[i] = config.getItemStack("slot" + i);
+        }
+        return contents;
+    }
+
+    private List<ItemStack> readStoredItemList(YamlConfiguration config) {
+        if (config.getInt("version", 1) >= 3) {
+            String encoded = config.getString("items");
+            if (encoded != null && !encoded.isEmpty()) {
+                try {
+                    ItemStack[] decoded = ItemStack.deserializeItemsFromBytes(
+                            Base64.getDecoder().decode(encoded));
+                    List<ItemStack> stored = new ArrayList<>(decoded.length);
+                    for (ItemStack item : decoded) {
+                        if (item != null && !item.isEmpty()) {
+                            stored.add(item);
+                        }
+                    }
+                    return stored;
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Failed to decode NBT overflow payload: " + e.getMessage());
+                }
+            }
+        }
+        List<ItemStack> stored = new ArrayList<>();
+        for (int i = 0; ; i++) {
+            ItemStack item = config.getItemStack("slot" + i);
+            if (item == null) {
+                break;
+            }
+            if (!item.isEmpty()) {
+                stored.add(item);
+            }
+        }
+        return stored;
+    }
+
+    private void writeStoredItems(YamlConfiguration config, ItemStack[] contents) {
+        config.set("version", STORAGE_VERSION);
+        config.set("items", Base64.getEncoder().encodeToString(
+                ItemStack.serializeItemsAsBytes(contents)));
+    }
+
+    private void writeStoredItemList(YamlConfiguration config, Collection<ItemStack> items) {
+        config.set("version", STORAGE_VERSION);
+        config.set("items", Base64.getEncoder().encodeToString(
+                ItemStack.serializeItemsAsBytes(List.copyOf(items))));
     }
 
     /**
@@ -516,16 +588,7 @@ public class BackpackManager implements Listener {
             quarantineFile(sidecar, "overflow");
             return;
         }
-        List<ItemStack> stored = new ArrayList<>();
-        for (int i = 0; ; i++) {
-            ItemStack item = saved.getItemStack("slot" + i);
-            if (item == null) {
-                break;
-            }
-            if (!item.isEmpty()) {
-                stored.add(item);
-            }
-        }
+        List<ItemStack> stored = readStoredItemList(saved);
         if (stored.isEmpty()) {
             if (sidecar.length() == 0 && sidecar.delete()) {
                 plugin.getLogger().info("Removed empty overflow file for backpack " + uuid + ".");
@@ -552,11 +615,7 @@ public class BackpackManager implements Listener {
             messages.send(ownerPlayer, "backpack-full", "{size}", String.valueOf(rest.size()));
         }
         YamlConfiguration rewritten = new YamlConfiguration();
-        rewritten.set("version", STORAGE_VERSION);
-        int slot = 0;
-        for (ItemStack item : rest.values()) {
-            rewritten.set("slot" + slot++, item);
-        }
+        writeStoredItemList(rewritten, rest.values());
         try {
             writeYamlFile(rewritten, sidecar);
             plugin.getLogger().warning("Restored %s overflow item(s) into backpack %s; %s item(s) remain in %s."
@@ -583,27 +642,18 @@ public class BackpackManager implements Listener {
             return;
         }
         File overflowFile = new File(dataFolder, owner + ".overflow.yml");
-        YamlConfiguration overflowConfig = new YamlConfiguration();
-        overflowConfig.set("version", STORAGE_VERSION);
-        int slot = 0;
+        List<ItemStack> merged = new ArrayList<>();
         if (overflowFile.exists()) {
             YamlConfiguration existing = tryLoadYaml(overflowFile);
             if (existing == null) {
                 quarantineFile(overflowFile, "overflow");
             } else {
-                while (true) {
-                    ItemStack kept = existing.getItemStack("slot" + slot);
-                    if (kept == null) {
-                        break;
-                    }
-                    overflowConfig.set("slot" + slot, kept);
-                    slot++;
-                }
+                merged.addAll(readStoredItemList(existing));
             }
         }
-        for (ItemStack item : fresh) {
-            overflowConfig.set("slot" + slot++, item);
-        }
+        merged.addAll(fresh);
+        YamlConfiguration overflowConfig = new YamlConfiguration();
+        writeStoredItemList(overflowConfig, merged);
         try {
             writeYamlFile(overflowConfig, overflowFile);
             plugin.getLogger().warning("Backpack %s shrank below its stored contents; %s item(s) saved to %s."
@@ -1317,9 +1367,8 @@ public class BackpackManager implements Listener {
                     createSnapshot(owner);
                 }
                 YamlConfiguration config = new YamlConfiguration();
-                config.set("version", STORAGE_VERSION);
                 config.set("size", contents.length);
-                for (int i = 0; i < contents.length; i++) config.set("slot" + i, contents[i]);
+                writeStoredItems(config, contents);
                 writeYamlFile(config, file);
                 // Do not put sequence back into saveSequences: nextSaveSequence
                 // already tracks the highest scheduled value. Overwriting it
