@@ -19,6 +19,7 @@
 ### Changed
 - Paper API bumped to `26.3.build.249-stable`.
 - Config GUI uses `ItemStack.of` / `editMeta`; open sound uses the player as emitter.
+- Update-checker log messages are English to match the rest of the plugin logs.
 - Plain Gradle jar uses classifier `plain`; `build` depends on `shadowJar`. Release CI uses `gradle/actions/setup-gradle`.
 
 ## 7.3.0 - 2026-11-10
