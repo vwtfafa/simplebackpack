@@ -964,13 +964,31 @@ public class BackpackManager implements Listener {
         if (!usageEnabled) {
             return "backpacks-disabled";
         }
-        if (usageDisabledWorlds.contains(player.getWorld().getName())) {
+        if (isUsageWorldDisabled(player.getWorld())) {
             return "not-allowed-world";
         }
         if (!usageAllowCreative && gameMode == GameMode.CREATIVE) {
             return "creative-not-allowed";
         }
         return null;
+    }
+
+    /**
+     * Matches {@code backpack.disabled-worlds} entries by world name or
+     * namespaced key ({@code minecraft:world_nether}).
+     */
+    private boolean isUsageWorldDisabled(org.bukkit.World world) {
+        if (usageDisabledWorlds.isEmpty()) {
+            return false;
+        }
+        String name = world.getName();
+        String key = world.getKey().toString();
+        for (String entry : usageDisabledWorlds) {
+            if (entry.equalsIgnoreCase(name) || entry.equalsIgnoreCase(key)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

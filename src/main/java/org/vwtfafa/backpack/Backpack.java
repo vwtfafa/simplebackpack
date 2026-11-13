@@ -215,6 +215,10 @@ public class Backpack extends JavaPlugin implements Listener {
         return settings.disabledWorlds();
     }
 
+    boolean isWorldDisabled(org.bukkit.World world) {
+        return settings.isWorldDisabled(world);
+    }
+
     boolean guiConfigurable() {
         return settings.guiConfigurable();
     }

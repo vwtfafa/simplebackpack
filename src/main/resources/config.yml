@@ -23,7 +23,7 @@ backpack:
   gui-configurable: true      # If true, players can configure backpack via GUI
   open-sound: true            # Play a sound when opening the backpack
   first-join-message: true    # Send new players a one-time welcome message about /backpack
-  disabled-worlds: []         # World names where /backpack cannot be used, e.g. [example_world, example_nether]
+  disabled-worlds: []         # World names or keys where /backpack cannot be used, e.g. [world_nether, minecraft:the_end]
 
 # === Team Settings ===
 team:

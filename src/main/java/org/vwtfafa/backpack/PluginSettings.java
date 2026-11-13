@@ -216,4 +216,22 @@ final class PluginSettings {
     List<String> disabledWorlds() {
         return disabledWorlds;
     }
+
+    /**
+     * True when the world is listed by plain name or by namespaced key
+     * ({@code minecraft:world_nether}) in {@code backpack.disabled-worlds}.
+     */
+    boolean isWorldDisabled(org.bukkit.World world) {
+        if (world == null || disabledWorlds.isEmpty()) {
+            return false;
+        }
+        String name = world.getName();
+        String key = world.getKey().toString();
+        for (String entry : disabledWorlds) {
+            if (entry.equalsIgnoreCase(name) || entry.equalsIgnoreCase(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
