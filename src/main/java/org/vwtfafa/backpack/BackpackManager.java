@@ -157,7 +157,7 @@ public class BackpackManager implements Listener {
         recentSaveOwners.remove(owner);
         player.openInventory(inv);
         if (plugin.getConfig().getBoolean("backpack.open-sound", true)) {
-            player.playSound(player.getLocation(), Sound.BLOCK_BARREL_OPEN, 1.0f, 1.0f);
+            player.playSound(player, Sound.BLOCK_BARREL_OPEN, 1.0f, 1.0f);
         }
     }
 
@@ -1010,13 +1010,16 @@ public class BackpackManager implements Listener {
         Inventory gui = Bukkit.createInventory(holder, 9, messages.component("gui-config-title"));
         holder.setInventory(gui);
         // Slot 0: Change Name
-        ItemStack nameItem = new ItemStack(Material.NAME_TAG);
+        ItemStack nameItem = ItemStack.of(Material.NAME_TAG);
+        nameItem.editMeta(meta -> meta.displayName(messages.component("gui-config-name")));
         gui.setItem(0, nameItem);
         // Slot 1: Change Color
-        ItemStack colorItem = new ItemStack(Material.LIME_DYE);
+        ItemStack colorItem = ItemStack.of(Material.LIME_DYE);
+        colorItem.editMeta(meta -> meta.displayName(messages.component("gui-config-color")));
         gui.setItem(1, colorItem);
         // Slot 2: Change Size
-        ItemStack sizeItem = new ItemStack(Material.CHEST);
+        ItemStack sizeItem = ItemStack.of(Material.CHEST);
+        sizeItem.editMeta(meta -> meta.displayName(messages.component("gui-config-size")));
         gui.setItem(2, sizeItem);
         player.openInventory(gui);
     }
