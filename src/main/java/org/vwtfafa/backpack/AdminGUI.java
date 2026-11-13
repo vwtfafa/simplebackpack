@@ -10,12 +10,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class AdminGUI implements Listener {
     private static final int PAGE_SIZE = 45;
@@ -26,9 +27,9 @@ public class AdminGUI implements Listener {
     private final BackpackManager manager;
     private final Messages messages;
     private final NamespacedKey ownerKey;
-    // Known backpacks of the open list; a fresh command invocation rescans,
-    // paging reuses the snapshot so browsing does not hit the disk per click
-    private List<UUID> knownBackpacks;
+    // Per-admin list snapshot so concurrent /backpackadmin gui sessions do not
+    // reset each other's paging state.
+    private final Map<UUID, List<UUID>> knownBackpacksByAdmin = new ConcurrentHashMap<>();
 
     public AdminGUI(BackpackManager manager, Messages messages) {
         this.manager = manager;
@@ -39,17 +40,16 @@ public class AdminGUI implements Listener {
 
     public void openAdminGUI(Player admin) {
         // Entry point (command): always show a fresh scan, then page through it
-        knownBackpacks = null;
+        knownBackpacksByAdmin.remove(admin.getUniqueId());
         openAdminGUI(admin, 0);
     }
 
     public void openAdminGUI(Player admin, int page) {
-        if (knownBackpacks == null) {
-            List<UUID> known = new ArrayList<>(manager.listKnownBackpacks());
-            known.sort(UUID::compareTo);
-            knownBackpacks = known;
-        }
-        List<UUID> known = knownBackpacks;
+        List<UUID> known = knownBackpacksByAdmin.computeIfAbsent(admin.getUniqueId(), id -> {
+            List<UUID> scanned = new ArrayList<>(manager.listKnownBackpacks());
+            scanned.sort(UUID::compareTo);
+            return scanned;
+        });
         int maxPage = Math.max(0, (known.size() - 1) / PAGE_SIZE);
         int current = Math.min(Math.max(0, page), maxPage);
 
@@ -75,33 +75,29 @@ public class AdminGUI implements Listener {
 
     private ItemStack createEntryItem(UUID uuid) {
         String name = manager.playerName(uuid);
-        ItemStack item = new ItemStack(Material.CHEST);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.text(name));
-        List<Component> lore = new ArrayList<>();
-        lore.add(messages.component("gui-entry-size", "{size}",
-                String.valueOf(manager.getBackpackSizeFor(uuid))));
-        lore.add(messages.component("gui-entry-instructions"));
-        meta.lore(lore);
-        // Owner is stored in the PDC instead of parsing it from the lore
-        meta.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, uuid.toString());
-        item.setItemMeta(meta);
+        ItemStack item = ItemStack.of(Material.CHEST);
+        item.editMeta(meta -> {
+            meta.displayName(Component.text(name));
+            List<Component> lore = new ArrayList<>();
+            lore.add(messages.component("gui-entry-size", "{size}",
+                    String.valueOf(manager.getBackpackSizeFor(uuid))));
+            lore.add(messages.component("gui-entry-instructions"));
+            meta.lore(lore);
+            // Owner is stored in the PDC instead of parsing it from the lore
+            meta.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, uuid.toString());
+        });
         return item;
     }
 
     private ItemStack navItem(Component label) {
-        ItemStack item = new ItemStack(Material.ARROW);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(label);
-        item.setItemMeta(meta);
+        ItemStack item = ItemStack.of(Material.ARROW);
+        item.editMeta(meta -> meta.displayName(label));
         return item;
     }
 
     private ItemStack infoItem(Component label) {
-        ItemStack item = new ItemStack(Material.BOOK);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(label);
-        item.setItemMeta(meta);
+        ItemStack item = ItemStack.of(Material.BOOK);
+        item.editMeta(meta -> meta.displayName(label));
         return item;
     }
 
@@ -128,7 +124,9 @@ public class AdminGUI implements Listener {
 
         ItemStack clicked = event.getCurrentItem();
         if (clicked == null || clicked.isEmpty()) return;
-        String uuidStr = clicked.getItemMeta().getPersistentDataContainer()
+        var meta = clicked.getItemMeta();
+        if (meta == null) return;
+        String uuidStr = meta.getPersistentDataContainer()
                 .get(ownerKey, PersistentDataType.STRING);
         if (uuidStr == null) return;
         try {
