@@ -76,7 +76,7 @@ See `plugins/SimpleBackpack/config.yml` for all configuration options:
 - `backpack.gui-configurable` - Allow in-game configuration
 - `backpack.open-sound` - Play a sound when opening the backpack
 - `backpack.first-join-message` - One-time welcome message for new players
-- `backpack.disabled-worlds` - World names where `/backpack` cannot be used, e.g. `[example_world]`
+- `backpack.disabled-worlds` - World names or keys where `/backpack` cannot be used, e.g. `[world_nether, minecraft:the_end]`
 
 Example permission tiers:
 

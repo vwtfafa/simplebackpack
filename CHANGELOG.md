@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Backpack storage format v3: items persist as Base64 NBT via `ItemStack.serializeItemsAsBytes` (legacy `slotN` YAML still loads).
+- `backpack.disabled-worlds` accepts namespaced keys (`minecraft:world_nether`) as well as plain world names.
+- Config GUI slots are labeled; team invite rejection message when a non-owner invites.
+
+### Fixed
+- Corrupt backpack YAML is quarantined instead of treated as empty and overwritten.
+- Async join preload uses `putIfAbsent` so it cannot replace a live backpack with stale disk state.
+- Completed older async saves no longer lower the monotonic save sequence.
+- Owner death with `keep-on-death: false` no longer wipes multi-member team backpacks.
+- Active share sessions are retargeted when team backpack ownership transfers.
+- Admin GUI keeps a per-viewer known-backpack list so concurrent admins do not clash.
+- Only the team owner can invite players.
+
+### Changed
+- Paper API bumped to `26.3.build.249-stable`.
+- Config GUI uses `ItemStack.of` / `editMeta`; open sound uses the player as emitter.
+- Plain Gradle jar uses classifier `plain`; `build` depends on `shadowJar`. Release CI uses `gradle/actions/setup-gradle`.
+
 ## 7.3.0 - 2026-11-10
 
 ### Added

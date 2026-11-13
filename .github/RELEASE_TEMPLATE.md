@@ -16,10 +16,14 @@
 | `/bp` | Alias for `/backpack` | `simplebackpack.use` |
 | `/backpackconfig` | Open the backpack configuration GUI | `simplebackpack.config` |
 | `/backpackreload` | Reload the SimpleBackpack config | `simplebackpack.reload` |
-| `/invite <player>` | Invite a player to your team | `simplebackpack.team.invite` |
+| `/invite <player>` | Invite a player to your team (owner only) | `simplebackpack.team.invite` |
 | `/team` | Show your team members | `simplebackpack.team` |
+| `/team accept` | Accept a team invitation | `simplebackpack.team` |
 | `/leave` | Leave your current team | `simplebackpack.team.leave` |
+| `/backpackadmin` | Show admin command overview | `simplebackpack.admin` |
 | `/backpackadmin gui` | Open admin overview GUI | `simplebackpack.admin` |
+| `/backpackadmin clear <player>` | Wipe a player's backpack | `simplebackpack.admin` |
+| `/backpackadmin enable` / `disable` | Toggle backpacks globally | `simplebackpack.admin` |
 | `/backpackshare <player> [minutes]` | Temporarily share your backpack | `simplebackpack.use` |
 
 ### 🔌 Integrations
@@ -32,12 +36,14 @@
 
 `plugins/SimpleBackpack/config.yml`:
 
-- Backpack name, size, color
+- Backpack name, size, color, permission-size tiers
+- Disabled worlds (names or namespaced keys)
 - Team settings (enabled, max size)
 - Admin settings (GUI, auto-snapshot)
 - Command visibility (classic mode, show team/admin commands — requires restart)
 - Feature flags (enable sharing)
 - Messaging (enabled, language)
+- Update checker (enabled, notify ops)
 - Live config reload (`live-config-reload=false` disables `/backpackreload`)
 - Keep contents on death
 
@@ -46,7 +52,7 @@
 | Platform | Version | Support |
 | -------- | ------- | ------- |
 | **Paper** | @PAPER@+ | ✅ Recommended |
-| **Purpur** | @PAPER@+ | ✅ Works (Paper fork) |
+| **Purpur** | @PAPER@+ | ⚠️ Expected to work, not separately tested |
 
 > Commands use Paper's Brigadier lifecycle API — Spigot/Bukkit servers are not supported.
 
