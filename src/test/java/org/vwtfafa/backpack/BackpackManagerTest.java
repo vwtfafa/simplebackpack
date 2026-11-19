@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Set;
 import java.util.UUID;
 
 class BackpackManagerTest {
@@ -30,6 +31,21 @@ class BackpackManagerTest {
         assertTrue(BackpackInventoryHolder.admin(owner, true, 0L).isPreview());
         assertEquals(BackpackInventoryHolder.Type.CONFIG,
             BackpackInventoryHolder.config().getType());
+    }
+
+    @Test
+    void unloadCandidatesDeduplicateOwnBackpackOwner() {
+        UUID player = UUID.randomUUID();
+
+        assertEquals(Set.of(player), BackpackManager.unloadCandidates(player, player));
+    }
+
+    @Test
+    void unloadCandidatesKeepTeamOwner() {
+        UUID player = UUID.randomUUID();
+        UUID owner = UUID.randomUUID();
+
+        assertEquals(Set.of(player, owner), BackpackManager.unloadCandidates(player, owner));
     }
 
     @Test

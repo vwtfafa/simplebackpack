@@ -8,6 +8,7 @@
 - Config GUI slots are labeled; team invite rejection message when a non-owner invites.
 
 ### Fixed
+- Player quit no longer throws `IllegalArgumentException: duplicate element` from `unloadQuitBackpacks` when a player owns their backpack and therefore resolves to their own UUID.
 - Corrupt backpack YAML is quarantined instead of treated as empty and overwritten.
 - Async join preload uses `putIfAbsent` so it cannot replace a live backpack with stale disk state.
 - Completed older async saves no longer lower the monotonic save sequence.

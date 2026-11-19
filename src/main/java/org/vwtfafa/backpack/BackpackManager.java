@@ -1256,7 +1256,9 @@ public class BackpackManager implements Listener {
      */
     void unloadQuitBackpacks(Player quitting) {
         UUID quitId = quitting.getUniqueId();
-        Set<UUID> candidates = new HashSet<>(Set.of(quitId, resolveEffectiveOwner(quitId)));
+        // Set.of rejects duplicates, and a player without a team/share resolves
+        // to their own UUID, so the candidates must come from a mutable set
+        Set<UUID> candidates = unloadCandidates(quitId, resolveEffectiveOwner(quitId));
         for (UUID candidate : candidates) {
             if (!backpacks.containsKey(candidate)) {
                 continue;
@@ -1276,6 +1278,13 @@ public class BackpackManager implements Listener {
                 recentSaveOwners.remove(candidate);
             }
         }
+    }
+
+    static Set<UUID> unloadCandidates(UUID quitId, UUID effectiveOwner) {
+        Set<UUID> candidates = new HashSet<>();
+        candidates.add(quitId);
+        candidates.add(effectiveOwner);
+        return candidates;
     }
 
     /**
