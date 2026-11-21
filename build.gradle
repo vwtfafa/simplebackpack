@@ -101,7 +101,7 @@ checkstyle {
 }
 
 spotbugs {
-    toolVersion = "4.10.3"
+    toolVersion = "4.10.5"
     ignoreFailures = false
 
     effort = Effort.MAX
