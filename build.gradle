@@ -96,7 +96,7 @@ processResources {
 }
 
 checkstyle {
-    toolVersion = "10.12.4"
+    toolVersion = "14.4.0"
     configFile = file("config/checkstyle/checkstyle.xml")
 }
 
