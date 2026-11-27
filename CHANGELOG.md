@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 7.3.1 - 2026-11-27
 
 ### Added
 - Backpack storage format v3: items persist as Base64 NBT via `ItemStack.serializeItemsAsBytes` (legacy `slotN` YAML still loads).
