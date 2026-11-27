@@ -50,9 +50,10 @@ public class Backpack extends JavaPlugin implements Listener {
         new Metrics(this, BSTATS_PLUGIN_ID);
         getLogger().info("bStats metrics enabled (ID: " + BSTATS_PLUGIN_ID + ")");
         manager = new BackpackManager(this, messages, settings.backpackName(), settings.backpackSize(),
-                teamRegistry, settings.teamEnabled());
+                settings.backpackPermissionSizes(), teamRegistry, settings.teamEnabled());
         manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
                 settings.disabledWorlds());
+        manager.setAdminSnapshotEnabled(settings.adminAutoSnapshot());
         getServer().getPluginManager().registerEvents(this, this);
         registerCommands();
         if (settings.adminEnabled() && settings.adminGuiEnabled()) {
@@ -72,16 +73,16 @@ public class Backpack extends JavaPlugin implements Listener {
             if (!settings.classicMode()) {
                 registrar.register(new BackpackConfigCommand(this).node(),
                         "Open the backpack configuration GUI", List.of());
+                registrar.register(new BackpackReloadCommand(this).node(),
+                        "Reloads the SimpleBackpack config", List.of());
             }
-            registrar.register(new BackpackReloadCommand(this).node(),
-                    "Reloads the SimpleBackpack config", List.of());
             if (settings.teamEnabled() && settings.showTeamCommands() && !settings.classicMode()) {
                 registrar.register(new InviteCommand(this).node(), "Invite a player to your team", List.of());
                 registrar.register(new TeamCommand(this).node(), "Show your team members or accept an invite",
                         List.of());
                 registrar.register(new LeaveCommand(this).node(), "Leave your current team", List.of());
             }
-            if (settings.adminEnabled() && settings.showAdminCommands()) {
+            if (settings.adminEnabled() && settings.showAdminCommands() && !settings.classicMode()) {
                 registrar.register(new BackpackAdminCommand(this).node(),
                         "Admin commands for SimpleBackpack", List.of());
             }
@@ -103,10 +104,11 @@ public class Backpack extends JavaPlugin implements Listener {
         reloadConfig();
         messages.reload();
         loadConfigOptions();
-        manager.setConfig(settings.backpackName(), settings.backpackSize(),
+        manager.setConfig(settings.backpackName(), settings.backpackSize(), settings.backpackPermissionSizes(),
                 settings.teamEnabled());
         manager.setUsagePolicy(settings.backpacksEnabled(), settings.allowInCreative(),
                 settings.disabledWorlds());
+        manager.setAdminSnapshotEnabled(settings.adminAutoSnapshot());
     }
 
     @EventHandler
@@ -118,10 +120,10 @@ public class Backpack extends JavaPlugin implements Listener {
         // Greet genuinely new players exactly once; the PDC flag also covers
         // players who joined before this option existed
         PersistentDataContainer pdc = player.getPersistentDataContainer();
-        if (player.hasPlayedBefore() || pdc.has(firstJoinKey, PersistentDataType.BYTE)) {
+        if (player.hasPlayedBefore() || pdc.has(firstJoinKey, PersistentDataType.BOOLEAN)) {
             return;
         }
-        pdc.set(firstJoinKey, PersistentDataType.BYTE, (byte) 1);
+        pdc.set(firstJoinKey, PersistentDataType.BOOLEAN, true);
         messages.send(player, "first-join");
     }
 
@@ -133,8 +135,12 @@ public class Backpack extends JavaPlugin implements Listener {
         // Warm the cache so the first open doesn't wait on disk I/O
         Player player = event.getPlayer();
         manager.refreshPlayerName(player.getUniqueId(), player.getName());
-        manager.preloadBackpack(player.getUniqueId());
-        manager.preloadBackpack(manager.resolveEffectiveOwner(player.getUniqueId()));
+        UUID own = player.getUniqueId();
+        manager.preloadBackpack(own);
+        UUID effective = manager.resolveEffectiveOwner(own);
+        if (!effective.equals(own)) {
+            manager.preloadBackpack(effective);
+        }
     }
 
     @EventHandler
@@ -152,7 +158,7 @@ public class Backpack extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
         if (!settings.keepContentsOnDeath() && manager != null) {
-            manager.clearBackpack(event.getEntity());
+            manager.clearBackpack(event.getPlayer());
         }
     }
 
@@ -180,6 +186,10 @@ public class Backpack extends JavaPlugin implements Listener {
         return settings.teamMaxSize();
     }
 
+    boolean teamEnabled() {
+        return settings.teamEnabled();
+    }
+
     boolean backpacksEnabled() {
         return settings.backpacksEnabled();
     }
@@ -203,6 +213,10 @@ public class Backpack extends JavaPlugin implements Listener {
 
     List<String> disabledWorlds() {
         return settings.disabledWorlds();
+    }
+
+    boolean isWorldDisabled(org.bukkit.World world) {
+        return settings.isWorldDisabled(world);
     }
 
     boolean guiConfigurable() {

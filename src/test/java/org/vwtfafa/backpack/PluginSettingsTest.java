@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
 import java.util.logging.Logger;
 
 class PluginSettingsTest {
@@ -23,6 +24,28 @@ class PluginSettingsTest {
         assertEquals(27, PluginSettings.sanitizeBackpackSize(LOGGER, 28));
         assertEquals(27, PluginSettings.sanitizeBackpackSize(LOGGER, 100));
         assertEquals(27, PluginSettings.sanitizeBackpackSize(LOGGER, -9));
+    }
+
+    @Test
+    void permissionSizesSelectTheLargestGrantedTier() {
+        Map<String, Integer> tiers = Map.of(
+                "simplebackpack.size.36", 36,
+                "simplebackpack.size.54", 54);
+
+        assertEquals(54, PluginSettings.resolveBackpackSize(27, tiers,
+                permission -> permission.endsWith(".36") || permission.endsWith(".54")));
+        assertEquals(36, PluginSettings.resolveBackpackSize(27, tiers,
+                permission -> permission.endsWith(".36")));
+        assertEquals(27, PluginSettings.resolveBackpackSize(27, tiers, permission -> false));
+    }
+
+    @Test
+    void invalidPermissionSizeEntriesAreIgnored() {
+        Map<String, Integer> tiers = PluginSettings.sanitizePermissionSizes(LOGGER, Map.of(
+                "simplebackpack.size.54", 54,
+                "simplebackpack.size.invalid", 55));
+
+        assertEquals(Map.of("simplebackpack.size.54", 54), tiers);
     }
 
     @Test

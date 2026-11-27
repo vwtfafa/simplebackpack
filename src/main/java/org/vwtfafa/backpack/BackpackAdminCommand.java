@@ -8,6 +8,8 @@ import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
 import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
 import org.bukkit.entity.Player;
 
+import java.util.UUID;
+
 /**
  * /backpackadmin [gui|clear <player>|enable|disable] - admin entry point
  * with the overview GUI plus live maintenance commands.
@@ -39,11 +41,11 @@ final class BackpackAdminCommand extends SubCommand {
                                 .executes(ctx -> {
                                     Player target = ctx.getArgument("player", PlayerSelectorArgumentResolver.class)
                                             .resolve(ctx.getSource()).getFirst();
-                                    plugin.manager().clearForAdmin(
-                                            plugin.manager().resolveEffectiveOwner(target.getUniqueId()),
-                                            ctx.getSource().getSender());
+                                    UUID cleared = plugin.manager().clearForAdmin(
+                                            target.getUniqueId(), ctx.getSource().getSender());
                                     plugin.messages().send(ctx.getSource().getSender(),
-                                            "admin-cleared", "{player}", target.getName());
+                                            "admin-cleared", "{player}",
+                                            plugin.manager().playerName(cleared));
                                     return Command.SINGLE_SUCCESS;
                                 })))
                 .then(Commands.literal("enable")

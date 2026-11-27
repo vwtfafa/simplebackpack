@@ -47,10 +47,34 @@ class TeamRegistryTest {
         UUID high = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
         registry.createTeam(owner, Set.of(low, high, owner));
 
-        assertTrue(registry.removeMember(owner));
+        TeamRegistry.RemovalResult result = registry.removeMember(owner);
+        assertTrue(result.leftTeam());
         UUID successor = registry.findOwner(low);
         assertEquals(successor, registry.findOwner(high));
+        assertEquals(successor, result.newOwner());
         assertFalse(successor.equals(owner));
+    }
+
+    @Test
+    void memberLeavingReportsNoSuccessor() {
+        TeamRegistry registry = new TeamRegistry();
+        UUID owner = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        registry.createTeam(owner, Set.of(member));
+
+        TeamRegistry.RemovalResult result = registry.removeMember(member);
+        assertTrue(result.leftTeam());
+        assertNull(result.newOwner());
+        assertEquals(owner, registry.findOwner(owner));
+    }
+
+    @Test
+    void removingNonMemberReportsNoTeam() {
+        TeamRegistry registry = new TeamRegistry();
+
+        TeamRegistry.RemovalResult result = registry.removeMember(UUID.randomUUID());
+        assertFalse(result.leftTeam());
+        assertNull(result.newOwner());
     }
 
     @Test
@@ -58,7 +82,9 @@ class TeamRegistryTest {
         TeamRegistry registry = new TeamRegistry();
         UUID owner = UUID.randomUUID();
         registry.createTeam(owner, Set.of());
-        assertTrue(registry.removeMember(owner));
+        TeamRegistry.RemovalResult result = registry.removeMember(owner);
+        assertTrue(result.leftTeam());
+        assertNull(result.newOwner());
 
         assertNull(registry.findOwner(owner));
         assertEquals(Set.of(), registry.membersOf(owner));

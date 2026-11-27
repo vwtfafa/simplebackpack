@@ -54,8 +54,9 @@ final class BackpackShareCommand extends SubCommand {
             plugin.messages().send(player, "sharing-disabled");
             return;
         }
-        if (!plugin.manager().shareBackpack(player.getUniqueId(), target.getUniqueId(),
-                durationMinutes * MILLIS_PER_MINUTE)) {
+        if (!plugin.manager().shareBackpack(
+                plugin.manager().resolveOwnedBackpack(player.getUniqueId()),
+                target.getUniqueId(), durationMinutes * MILLIS_PER_MINUTE)) {
             plugin.messages().send(player, "share-self");
             return;
         }

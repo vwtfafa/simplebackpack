@@ -31,6 +31,7 @@ description: >
 
   Features:
     - Personal Backpacks: per-player persistent backpacks with configurable size, name and color.
+    - Permission Size Tiers: configurable permission nodes grant backpack sizes.
     - Team Backpacks: create/invite/share backpacks with simple team commands.
     - Classic Mode: minimal mode with only /backpack and /bp.
     - Admin Tools: admin GUI, live reload and audit logging.

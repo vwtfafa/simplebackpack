@@ -32,7 +32,13 @@ final class LeaveCommand extends SubCommand {
             return;
         }
         // removeMember handles empty teams and deterministic owner succession
-        if (plugin.teamRegistry().removeMember(player.getUniqueId())) {
+        TeamRegistry.RemovalResult result = plugin.teamRegistry().removeMember(player.getUniqueId());
+        if (result.leftTeam()) {
+            // The backpack is bound to the owner's UUID: hand it to the
+            // successor so the team keeps its contents.
+            if (result.newOwner() != null) {
+                plugin.manager().transferBackpackOwnership(player.getUniqueId(), result.newOwner());
+            }
             plugin.saveTeams();
             plugin.messages().send(player, "team-leave");
         } else {
